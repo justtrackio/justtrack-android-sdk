@@ -1,0 +1,526 @@
+import io.justtrack.Replacement
+import io.justtrack.ShadowAarDependenciesPlugin
+import io.justtrack.ShadowAarDependenciesPluginExtension
+import io.justtrack.proGuardGenerator.JavaAnalyzer
+
+buildscript {
+    dependencies {
+        classpath 'io.justtrack:proGuardGenerator:1.0-SNAPSHOT'
+    }
+}
+
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+    id 'maven-publish'
+    id 'jacoco'
+    id 'checkstyle'
+    id "org.jlleitschuh.gradle.ktlint"
+    id 'org.jetbrains.dokka' version '2.0.0'
+    alias(libs.plugins.detekt)
+}
+
+apply plugin: ShadowAarDependenciesPlugin
+apply from: '../buildSystem/version.gradle'
+apply from: '../buildSystem/generateIntegritySecret.gradle'
+
+def localProperties = rootProject.ext.loadRequiredLocalProperties(rootProject.rootDir)
+
+def versionMajor = rootProject.ext.getVersionMajor(project)
+def versionMinor = rootProject.ext.getVersionMinor(project)
+def versionPatch = rootProject.ext.getVersionPatch(project)
+def versionType = rootProject.ext.getVersionType(project) ?: ""
+
+def baseVersionName = "${versionMajor.toString()}.${versionMinor.toString()}.${versionPatch.toString()}"
+def versionName = versionType ? "${baseVersionName}${versionType}" : baseVersionName
+
+android {
+    // noinspection GradleDependency
+    compileSdk 35
+    buildToolsVersion "35.0.0"
+    lint {
+        abortOnError false
+    }
+
+    jacoco {
+        version = "0.8.11"
+    }
+
+    checkstyle {
+        toolVersion = '7.4'
+    }
+
+    defaultConfig {
+        minSdk 21
+        // We don't care about the target SDK version being too low as we are building an SDK and not
+        // an app which needs to be released in the Play Store.
+        // noinspection OldTargetApi
+        targetSdk 35
+        archivesBaseName = "io_justtrack_android_sdk"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        // The following argument makes the Android Test Orchestrator run its
+        // "pm clear" command after each test invocation. This command ensures
+        // that the app's state is completely cleared between tests.
+        testInstrumentationRunnerArguments clearPackageData: 'true'
+        testInstrumentationRunnerArguments useTestStorageService: "true"
+
+        buildConfigField "int", "VERSION_MAJOR", versionMajor.toString()
+        buildConfigField "int", "VERSION_MINOR", versionMinor.toString()
+        buildConfigField "int", "VERSION_PATCH", versionPatch.toString()
+        buildConfigField "String", "VERSION_NAME", "\"${versionName}\""
+        buildConfigField "String", "USER_ID_SECRET", "\"${localProperties.getProperty('userIdSecret', '')}\""
+
+        externalNativeBuild {
+            cmake {
+                cppFlags ""
+                arguments "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+        }
+    }
+
+    testOptions {
+        execution 'ANDROIDX_TEST_ORCHESTRATOR'
+        animationsDisabled true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildTypes {
+        debug {
+            enableUnitTestCoverage true
+            testCoverageEnabled true
+        }
+        release {
+            minifyEnabled true
+
+            proguardFiles getDefaultProguardFile('proguard-android.txt'),
+                    'proguard-rules.pro',
+                    'generated-proguard-rules.pro'
+
+            consumerProguardFiles 'consumer-rules.pro'
+
+            enableUnitTestCoverage true
+        }
+    }
+    namespace 'io.justtrack'
+
+    kotlinOptions {
+        jvmTarget = "17"
+        freeCompilerArgs += "-Xuse-experimental=kotlin.Experimental"
+        freeCompilerArgs += "-opt-in=kotlin.RequiresOptIn"
+    }
+
+    packagingOptions {
+        jniLibs {
+            // This is required for supporting 16kb pages phone. Remove this once we upgrade AGP to 8.3 or higher
+            useLegacyPackaging true
+        }
+        resources {
+            excludes += '/META-INF/licenses/ASM'
+        }
+    }
+}
+
+tasks.register('aar', Copy) {
+    from('build/outputs/aar/')
+    into('build/libs/')
+    include(archivesBaseName + '-release.aar')
+    rename(archivesBaseName + '-release.aar', archivesBaseName + '_v' + versionName + '.aar')
+}
+
+tasks.register('clearAar', Delete) {
+    delete fileTree('build/libs') {
+        include '**/' + archivesBaseName + '_v*.aar'
+    }
+}
+
+aar.dependsOn(clearAar, build)
+
+def configurePOM(MavenPom pom, boolean noDependencies, def artifactId, def versionName) {
+    pom.name = 'justtrack Android SDK'
+    pom.description = "justtrack is AppLike Group's next level attribution & UA automation platform - built by app publishers for app publishers."
+    pom.url = 'https://justtrack.io/'
+
+    //generate pom nodes for licenses
+    pom.withXml {
+        //noinspection GroovyImplicitNullArgumentCall
+        def licensesNode = asNode().appendNode('licenses')
+        def licenseNode = licensesNode.appendNode('license')
+        licenseNode.appendNode('name', 'MIT License')
+        licenseNode.appendNode('url', "https://sdk.justtrack.io/maven/io/justtrack/$artifactId/${versionName}/$artifactId-${versionName}-license.txt")
+        licenseNode.appendNode('distribution', 'repo')
+    }
+
+    //generate pom nodes for dependencies
+    pom.withXml {
+        //noinspection GroovyImplicitNullArgumentCall
+        def dependenciesNode = asNode().appendNode('dependencies')
+        def propertiesNode = asNode().appendNode('properties')
+        if (!noDependencies) {
+            configurations.implementation.allDependencies.each { dependency ->
+                // we seem to have some left-over empty dependency objects in our dependency list, skip them
+                if (dependency.group == null) {
+                    return
+                }
+                def dependencyNode = dependenciesNode.appendNode('dependency')
+                dependencyNode.appendNode('groupId', dependency.group)
+                dependencyNode.appendNode('artifactId', dependency.name)
+
+                dependencyNode.appendNode('version', dependency.version)
+
+                def matchedDependency = versions.find { _, versionInfo ->
+                    versionInfo.groupId == dependency.group && versionInfo.artifactId == dependency.name
+                }
+
+                if (matchedDependency) {
+                    def unityUpperBound = matchedDependency.value.unityUpperBound
+                    if (unityUpperBound) {
+                        // Add unityLimit as a property
+                        propertiesNode.appendNode("unityUpperBound.${dependency.group}.${dependency.name}", unityUpperBound)
+                    }
+                }
+            }
+        }
+    }
+}
+
+publishing {
+    repositories {
+        maven {
+            credentials(AwsCredentials) {
+                Properties properties = rootProject.ext.loadRequiredLocalProperties(rootProject.rootDir)
+                accessKey properties.getProperty('mavenPublicAwsAccessKeyId')
+                secretKey properties.getProperty('mavenPublicAwsSecretAccessKey')
+                sessionToken properties.getProperty("mavenPublicAwsSessionToken")
+            }
+
+            def isTest = project.hasProperty('isTest') && project.getProperty('isTest').toBoolean()
+
+            if (versionName.contains("test") || versionName.contains("-dev") || isTest) {
+                url "${mavenPublicTestUrl}"
+            } else if (versionName.contains("-rc")) {
+                url "${mavenPublicUrl}"
+            } else if (versionName.contains("-")) {
+                throw new RuntimeException("Don't know if this is a test or release version, please ensure it either contains rc, test, or dev for test versions or no suffix for release versions (or add a special case to this check if you need to do a special release). Got version '" + versionName + "'")
+            } else {
+                url "${mavenPublicUrl}"
+            }
+        }
+    }
+
+    publications {
+        lib(MavenPublication) {
+            artifact("$buildDir/libs/" + archivesBaseName + "_v" + versionName + ".aar")
+            artifact source: "$project.rootDir/LICENSE", classifier: 'license', extension: 'txt'
+
+            groupId = 'io.justtrack'
+            artifactId = 'justtrack-android-sdk'
+            version = versionName
+
+            pom { pom ->
+                configurePOM(pom, false, artifactId, versionName)
+            }
+        }
+
+        noDependencies(MavenPublication) {
+            artifact("$buildDir/libs/" + archivesBaseName + "_v" + versionName + ".aar")
+            artifact source: "$project.rootDir/LICENSE", classifier: 'license', extension: 'txt'
+
+            groupId = 'io.justtrack'
+            artifactId = 'justtrack-android-sdk-no-dependencies'
+            version = versionName
+
+            pom { pom ->
+                configurePOM(pom, true, artifactId, versionName)
+            }
+        }
+    }
+}
+
+// make the publishing tasks (dependencies) depend on the the aar task (which is after all the file we are publishing, so it should be up-to-date)
+for (String taskName in publish.dependsOn) {
+    tasks.named(taskName).configure { it.dependsOn(aar) }
+}
+
+// and the publishing task itself of course, too:
+publish.dependsOn(aar)
+
+// Adding a check for isTest in publish script.
+tasks.withType(PublishToMavenRepository).configureEach {
+    doFirst {
+        if (project.findProperty('isTest') == null) {
+            throw new RuntimeException("Don't know if this is a test or release version. Please ensure that the isTest property is set.")
+        }
+    }
+}
+
+project.android.libraryVariants.configureEach { variant ->
+    rootProject.ext.generateCode(project, variant, path -> {
+        def analyzer = new JavaAnalyzer()
+        analyzer.parseSourceRoot(path)
+
+        return analyzer.proguardDefinitions
+    })
+}
+
+project.android.libraryVariants.configureEach { variant ->
+    project.ext.generateIntegritySecret(project, variant)
+}
+
+def shadowAarPlugin = extensions.getByType(ShadowAarDependenciesPluginExtension)
+
+// InstallReferrer library
+shadowAarPlugin.relocations.add(new Replacement("com.android.installreferrer", "io.justtrack.installreferrer"))
+shadowAarPlugin.relocations.add(new Replacement("com.google.android.finsky.externalreferrer", "io.justtrack.finsky.externalreferrer"))
+shadowAarPlugin.relocations.add(new Replacement("com.google.android", "io.justtrack.google.android"))
+
+// OkHttp
+shadowAarPlugin.relocations.add(new Replacement("okhttp3", "io.justtrack.okhttp"))
+shadowAarPlugin.relocations.add(new Replacement("okio", "io.justtrack.okio"))
+
+
+// these are not classes, but special strings used to identify the service the install referrer
+// library talks to. Thus, don't move them to the justtrack namespace, otherwise the install
+// referrer library will not work
+shadowAarPlugin.ignoredClasses.add("com.google.android.finsky.externalreferrer.GetInstallReferrerService")
+shadowAarPlugin.ignoredClasses.add("com.google.android.finsky.externalreferrer.IGetInstallReferrerService")
+shadowAarPlugin.ignoredClasses.add("com.google.android.finsky.BIND_GET_INSTALL_REFERRER_SERVICE")
+
+android.testVariants.all {
+    def variant = it.testedVariant
+    def variantName = variant.name.capitalize()
+
+    tasks.create(name: "jacocoTestReport", type: JacocoReport)
+            { self ->
+                group = 'Reporting'
+                description = "Generates Jacoco coverage reports on the ${variant.name} variant"
+
+                reports {
+                    xml.required = true
+                    html.required = true
+                }
+
+                def excludes = [
+                        // data binding
+                        'android/databinding/**/*.class',
+                        '**/android/databinding/*Binding.class',
+                        '**/android/databinding/*',
+                        '**/androidx/databinding/*',
+                        '**/BR.*',
+                        // android
+                        '**/R.class',
+                        '**/R$*.class',
+                        '**/BuildConfig.*',
+                        '**/Manifest*.*',
+                        '**/*Test*.*',
+                        'android/**/*.*',
+                        // butterKnife
+                        '**/*$ViewInjector*.*',
+                        '**/*$ViewBinder*.*',
+                        // dagger
+                        '**/*_MembersInjector.class',
+                        '**/Dagger*Component.class',
+                        '**/Dagger*Component$Builder.class',
+                        '**/*Module_*Factory.class',
+                        '**/di/module/*',
+                        '**/*_Factory*.*',
+                        '**/*Module*.*',
+                        '**/*Dagger*.*',
+                        '**/*Hilt*.*',
+                        // kotlin
+                        '**/*MapperImpl*.*',
+                        '**/*$ViewInjector*.*',
+                        '**/*$ViewBinder*.*',
+                        '**/BuildConfig.*',
+                        '**/*Component*.*',
+                        '**/*BR*.*',
+                        '**/Manifest*.*',
+                        '**/*$Lambda$*.*',
+                        '**/*Companion*.*',
+                        '**/*Module*.*',
+                        '**/*Dagger*.*',
+                        '**/*Hilt*.*',
+                        '**/*MembersInjector*.*',
+                        '**/*_MembersInjector.class',
+                        '**/*_Factory*.*',
+                        '**/*_Provide*Factory*.*',
+                        '**/*Extensions*.*',
+                        // sealed and data classes
+                        '**/*$Result.*',
+                        '**/*$Result$*.*'
+                ]
+
+                def javaClasses = fileTree(dir:
+                        variant.javaCompileProvider.get().destinationDir,
+                        excludes: excludes)
+                def kotlinClasses =
+                        fileTree(dir: "${buildDir}/tmp/kotlin-classes/${variant.name}",
+                                excludes: excludes)
+                classDirectories.setFrom(files([
+                        javaClasses,
+                        kotlinClasses
+                ]))
+                def variantSourceSets = "${project.projectDir}/src/main/java"
+                sourceDirectories.setFrom(project.files(variantSourceSets))
+                def androidTestsData = fileTree(dir: "${buildDir}/outputs/code_coverage/${variant.name}AndroidTest/connected/", includes: ["**/*.ec"])
+                executionData(files([
+                        "$project.buildDir/outputs/unit_test_code_coverage/${variant.name}UnitTest/test${variantName}UnitTest.exec",
+                        androidTestsData
+                ]))
+
+            }
+
+    def compileTaskName = "compile${it.name.capitalize()}Kotlin"
+    def testUnitTestTaskName = "testDebugUnitTest"
+    tasks.named("jacocoTestReport") {
+        dependsOn tasks.named(compileTaskName)
+        dependsOn tasks.named(testUnitTestTaskName)
+    }
+}
+
+tasks.register('checkstyleMain', Checkstyle) {
+    configFile new File(rootDir, "config/checkstyle/rules.xml")
+    source 'src/main'
+    include '**/*.java'
+    exclude '**/gen/**'
+    exclude '**/R.java'
+    exclude '**/BuildConfig.java'
+    classpath = files()
+}
+
+tasks.register('checkstyleTest', Checkstyle) {
+    configFile new File(rootDir, "config/checkstyle/test_rules.xml")
+    source 'src/androidTest', 'src/test'
+    include '**/*.java'
+    classpath = files()
+}
+
+tasks.register('checkstyle') {
+    dependsOn checkstyleMain, checkstyleTest
+}
+
+ktlint {
+    version = "1.2.1"
+    android = true // to use the Android Studio KtLint plugin style
+    ignoreFailures = false
+}
+
+tasks.register('generateDokkaJavadoc', Copy) {
+    dependsOn("dokkaJavadoc")
+    finalizedBy("moveDokka")
+}
+
+tasks.register("moveDokka", Copy) {
+    def dokkaOutput = layout.buildDirectory.dir('dokka/javadoc')
+    def docsOutput = layout.buildDirectory.dir("docs/javadoc/${versionName}")
+
+    from(dokkaOutput)
+    into(docsOutput)
+}
+
+android.libraryVariants.configureEach { variant ->
+    tasks.register("generate${variant.name.capitalize()}Javadoc", Javadoc) {
+        doNotTrackState('Inputs and outputs are not tracked for this task')
+        source = variant.sourceSets.javaDirectories.flatten()
+        source += fileTree(dir: "${buildDir}/generated/source/sdkDTOSources/debug/io/justtrack", includes: ["**/*.java"])
+        source += fileTree(dir: "${buildDir}/generated/source/sdkSources/debug/io/justtrack", includes: ["**/*.java"])
+        source += fileTree(dir: "${buildDir}/generated/source/sdkEventSources/debug/io/justtrack", includes: ["**/*.java"])
+        classpath += project.files(android.getBootClasspath().join(File.pathSeparator))
+        classpath += variant.javaCompileProvider.get().classpath
+        destinationDir = file("${buildDir}/docs/javadoc/$versionName")
+        failOnError true
+    }
+
+    tasks.withType(Javadoc).tap {
+        configureEach {
+            //kotlin seem to have issue generating javadoc, but since kotlin class is not public so it should be fine
+            excludes = ['**/*.kt']
+            options.addStringOption('Xdoclint:none', '-quiet')
+            options.addStringOption('encoding', 'UTF-8')
+            options.addStringOption('charSet', 'UTF-8')
+        }
+    }
+}
+
+detekt {
+    config = files('detekt.yml')
+    buildUponDefaultConfig = true
+    baseline = file('detekt-baseline.xml')
+}
+
+dependencies {
+    androidTestImplementation libs.androidx.test.junit
+    androidTestImplementation 'org.mockito:mockito-android:5.5.0'
+    androidTestImplementation "org.mockito.kotlin:mockito-kotlin:4.1.0"
+    androidTestImplementation 'com.squareup.okhttp3:mockwebserver:4.3.1'
+    androidTestImplementation 'androidx.test:runner:1.6.1'
+    androidTestImplementation "androidx.test:core:1.6.1"
+    androidTestUtil 'androidx.test:orchestrator:1.5.0'
+    androidTestUtil 'androidx.test.services:test-services:1.5.0'
+
+    testImplementation libs.junit
+    testImplementation 'org.json:json:20230618'
+
+    testImplementation 'org.mockito:mockito-core:5.2.0'
+    testImplementation 'org.mockito:mockito-inline:5.2.0'
+    testImplementation "org.mockito.kotlin:mockito-kotlin:5.3.1"
+
+    implementation("${versions.integrity.groupId}:${versions.integrity.artifactId}") {
+        version {
+            strictly versions.integrity.range
+            prefer versions.integrity.prefer
+        }
+    }
+
+    implementation("${versions.lifecycle.groupId}:${versions.lifecycle.artifactId}") {
+        version {
+            strictly versions.lifecycle.range
+            prefer versions.lifecycle.prefer
+        }
+    }
+
+    implementation("${versions.adsIdentifier.groupId}:${versions.adsIdentifier.artifactId}") {
+        version {
+            strictly versions.adsIdentifier.range
+            prefer versions.adsIdentifier.prefer
+        }
+    }
+
+    implementation("${versions.appset.groupId}:${versions.appset.artifactId}") {
+        version {
+            strictly versions.appset.range
+            prefer versions.appset.prefer
+        }
+    }
+
+    implementation("${versions.coroutine.groupId}:${versions.coroutine.artifactId}") {
+        version {
+            strictly versions.coroutine.range
+            prefer versions.coroutine.prefer
+        }
+    }
+
+    implementation(libs.justtrack.integrity)
+
+    add("aarImplementation", "com.android.installreferrer:installreferrer:2.1")
+
+    add("aarImplementation", "com.squareup.okhttp3:okhttp:4.12.0")
+    add("aarImplementation", "com.squareup.okio:okio:3.9.1")
+}
+
+repositories {
+    mavenCentral()
+    google()
+    maven { url 'https://sdk.justtrack.io/maven' }
+}

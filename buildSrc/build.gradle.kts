@@ -1,0 +1,12 @@
+plugins {
+    `kotlin-dsl`
+}
+
+repositories {
+    gradlePluginPortal()
+}
+
+
+dependencies {
+    implementation("com.gradleup.shadow:shadow-gradle-plugin:9.2.2")
+}

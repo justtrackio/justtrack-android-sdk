@@ -1,0 +1,26 @@
+comments:
+  UndocumentedPublicClass:
+    active: true
+    excludes: ['**/test/**']
+    ignoreAnnotated: []
+
+  UndocumentedPublicFunction:
+    active: true
+    excludes: ['**/test/**']
+    ignoreAnnotated: []
+
+  UndocumentedPublicProperty:
+    active: true
+    excludes: ['**/test/**']
+    ignoreAnnotated: []
+complexity:
+  LongParameterList:
+    active: true
+    functionThreshold: 8
+    constructorThreshold: 8
+    ignoreDefaultParameters: false
+    ignoreDataClasses: true
+
+style:
+  MaxLineLength:
+    maxLineLength: 150

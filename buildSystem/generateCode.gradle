@@ -1,0 +1,26 @@
+ext {
+    generateCode = (Project project, def variant, def generateProGuardCode) -> {
+        String variantName = variant.name
+        String targetName = variantName.capitalize()
+        def basePath = project.file("$project.rootDir/sdk")
+        def proGuardFilePath = basePath.toString() + "/generated-proguard-rules.pro"
+        def sdkSourcePath = "$basePath/src/main/java"
+
+        project.tasks.register("generate${targetName}SDKSources") {
+            def proGuardFile = new File(proGuardFilePath)
+            inputs.dir(sdkSourcePath)
+            outputs.file(proGuardFile)
+
+            doLast {
+                updateProGuardFile(sdkSourcePath, proGuardFilePath, generateProGuardCode)
+            }
+        }
+    }
+}
+
+static def updateProGuardFile(String sdkPath, String proGuardPath, def generateProGuardCode) {
+    def file = new File(proGuardPath)
+    def generated = generateProGuardCode(sdkPath)
+
+    file.text = generated + "\n"
+}

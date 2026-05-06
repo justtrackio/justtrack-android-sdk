@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:paddingLeft="@dimen/activity_horizontal_margin"
+    android:paddingTop="@dimen/activity_vertical_margin"
+    android:paddingRight="@dimen/activity_horizontal_margin"
+    android:paddingBottom="@dimen/activity_vertical_margin"
+    android:fitsSystemWindows="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        tools:context=".SetIPActivity">
+
+        <Button
+            android:id="@+id/startAppButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="@string/start_app" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="5dp"
+            android:paddingHorizontal="5dp"
+            android:orientation="horizontal">
+            <EditText
+                android:id="@+id/customPackageNameEditText"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp">
+            </EditText>
+            <Button
+                android:id="@+id/clearCustomPacakgeNameButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/btn_clear"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="5dp"
+            android:paddingHorizontal="5dp"
+            android:orientation="horizontal">
+            <EditText
+                android:id="@+id/customVersionNameEditText"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"/>
+            <EditText
+                android:id="@+id/customVersionCodeEditText"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:layout_marginTop="5dp"/>
+            <Button
+                android:id="@+id/clearAppVersionButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/btn_clear"/>
+        </LinearLayout>
+
+
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/manualStartSwitch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/manual_start"
+            android:paddingTop="5dp" />
+
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/autoIapSwitch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/auto_iap"
+            android:checked="true"
+            android:paddingTop="5dp" />
+
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/enabledLogSwitch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/enable_log"
+            android:checked="true"
+            android:paddingTop="5dp" />
+
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/addCustomLog"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/add_custom_log"
+            android:checked="false"
+            android:paddingTop="5dp" />
+
+        <View
+            android:id="@+id/dividerTopView"
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="20dp"
+            android:background="?android:attr/listDivider" />
+
+        <Button
+            android:id="@+id/configureCustomUserIdButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="@string/configure_custom_user_id" />
+    </LinearLayout>
+</ScrollView>

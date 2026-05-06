@@ -1,0 +1,226 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id "org.jlleitschuh.gradle.ktlint"
+    id 'com.google.gms.google-services'
+}
+
+apply from: '../buildSystem/version.gradle'
+
+repositories {
+    google()
+    mavenCentral()
+    maven { url 'https://android-sdk.is.com/' }
+    maven { url 'https://artifact.bytedance.com/repository/pangle' }
+    maven { url "https://s3.amazonaws.com/smaato-sdk-releases/" }
+    maven { url 'https://sdk.justtrack.io/maven' }
+}
+
+def localProperties = new Properties()
+def localPropertiesFile = project.rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withInputStream { stream -> localProperties.load(stream) }
+}
+def requiredKeys = [
+        token       : "token",
+        signingKey  : "signingKey",
+        signingAlias: "signingAlias",
+        serverUrl   : "serverUrl",
+        applovinKey : "applovinKey",
+        ironsourceKey: "ironsourceKey",
+        chartboostAppId: "chartboostAppId",
+        chartboostKey: "chartboostKey",
+        unityAdsId: "unityAdsId"
+]
+requiredKeys.each { key, description ->
+    if (!localProperties.getProperty(key)) {
+        throw new GradleException("${description} missing in root local.properties.")
+    }
+}
+def configValues = requiredKeys.collectEntries { key, ignored ->
+    [(key): localProperties.getProperty(key)]
+}
+def appKey = configValues.token
+def signingKey = configValues.signingKey
+def signingAlias = configValues.signingAlias
+def serverUrl = configValues.serverUrl
+def appLovinKey = configValues.applovinKey
+def ironSourceKey = configValues.ironsourceKey
+def chartboostAppId = configValues.chartboostAppId
+def chartboostKey = configValues.chartboostKey
+def unityAdsId = configValues.unityAdsId
+
+android {
+    compileSdk 35
+    buildToolsVersion "35.0.0"
+    namespace 'io.justtrack.testapp'
+
+    defaultConfig {
+        minSdk 21
+        targetSdk 35
+        versionCode 1
+        versionName "1.0.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        multiDexEnabled true
+        manifestPlaceholders["applovinSdkKey"] = appLovinKey
+
+        externalNativeBuild {
+            cmake {
+                cppFlags ""
+                arguments "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    viewBinding {
+        enabled = true
+    }
+
+    signingConfigs {
+        defaultConfig {
+            storeFile new File(rootDir, 'debug.jks')
+            storePassword signingKey
+            keyAlias signingAlias
+            keyPassword signingKey
+        }
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+    flavorDimensions "application"
+
+    productFlavors {
+        app {
+            applicationId "io.justtrack.testapp"
+            buildConfigField "String", "APP_KEY", "\"${appKey}\""
+            buildConfigField "String", "SERVER_URL", "\"${serverUrl}\""
+            buildConfigField "String", "APPLOVIN_KEY", "\"${appLovinKey}\""
+            buildConfigField "String", "IRONSOURCE_KEY", "\"${ironSourceKey}\""
+            buildConfigField "String", "CHARTBOOST_APP_ID", "\"${chartboostAppId}\""
+            buildConfigField "String", "CHARTBOOST_KEY", "\"${chartboostKey}\""
+            buildConfigField "String", "UNITY_ADS_ID", "\"${unityAdsId}\""
+        }
+
+        appLegacyLib {
+            applicationId "io.justtrack.testapp"
+            buildConfigField "String", "APP_KEY", "\"${appKey}\""
+            buildConfigField "String", "SERVER_URL", "\"${serverUrl}\""
+            buildConfigField "String", "APPLOVIN_KEY", "\"${appLovinKey}\""
+            buildConfigField "String", "IRONSOURCE_KEY", "\"${ironSourceKey}\""
+            buildConfigField "String", "CHARTBOOST_APP_ID", "\"${chartboostAppId}\""
+            buildConfigField "String", "CHARTBOOST_KEY", "\"${chartboostKey}\""
+            buildConfigField "String", "UNITY_ADS_ID", "\"${unityAdsId}\""
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            signingConfig signingConfigs.defaultConfig
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            debuggable false
+        }
+        debug {
+            debuggable true
+        }
+    }
+}
+
+ktlint {
+    version = "1.2.1"
+    android = true // to use the Android Studio KtLint plugin style
+    ignoreFailures = false
+}
+
+dependencies {
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+
+    testImplementation 'junit:junit:4.13.2'
+
+    implementation 'com.google.android.material:material:1.9.0'
+    implementation 'androidx.annotation:annotation:1.7.0'
+    implementation 'androidx.lifecycle:lifecycle-extensions:2.2.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+
+    implementation 'com.google.android.gms:play-services-appset:16.0.2'
+    implementation 'com.google.android.gms:play-services-ads-identifier:18.0.1'
+    implementation 'com.google.android.gms:play-services-basement:18.2.0'
+
+    // to mock the referrer details (we just need the type)
+    implementation 'com.android.installreferrer:installreferrer:2.1'
+
+    appImplementation platform('com.google.firebase:firebase-bom:29.2.1')
+    appImplementation 'com.google.firebase:firebase-analytics'
+    implementation project(':integrations:firebase')
+
+    implementation "org.jetbrains.kotlin:kotlin-reflect:$versions.kotlin.prefer"
+
+    implementation "com.android.billingclient:billing:7.1.1"
+    implementation project(path: ':sdk')
+
+
+    // AppLovin
+    appImplementation project(':integrations:applovin')
+
+    appLegacyLibImplementation(project(":integrations:applovin")) {
+        exclude group: "com.applovin"
+    }
+
+    appImplementation libs.integrations.applovin
+    appLegacyLibImplementation libs.integrations.applovin.legacy
+
+
+    // IronSource
+    appImplementation project(':integrations:ironsource')
+    appLegacyLibImplementation(project(":integrations:ironsource")) {
+        // Exclude a transitive dependency
+        exclude group: "com.unity3d.ads-mediation"
+    }
+
+    appImplementation libs.integrations.ironsource
+    //noinspection UseTomlInstead
+    appLegacyLibImplementation libs.integrations.ironsource.legacy
+
+    appImplementation 'com.unity3d.ads-mediation:applovin-adapter:4.3.54'
+    appLegacyLibImplementation 'com.ironsource.adapters:applovinadapter:4.3.35'
+    // Add Facebook Network (Meta Audience)
+    appImplementation 'com.unity3d.ads-mediation:facebook-adapter:4.3.51'
+    appLegacyLibImplementation 'com.ironsource.adapters:facebookadapter:4.3.45'
+    appImplementation 'com.facebook.android:audience-network-sdk:6.20.0'
+    appLegacyLibImplementation 'com.facebook.android:audience-network-sdk:6.16.0'
+    // Add Fyber Network (Adapter only) (Digital Turbine)
+    appImplementation 'com.unity3d.ads-mediation:fyber-adapter:4.3.40'
+    appLegacyLibImplementation 'com.ironsource.adapters:fyberadapter:4.3.30'
+    appImplementation "com.fyber:marketplace-sdk:8.3.8"
+    appLegacyLibImplementation "com.fyber:marketplace-sdk:8.2.1"
+    // Add Pangle Network
+    appImplementation 'com.unity3d.ads-mediation:pangle-adapter:4.3.50'
+    appLegacyLibImplementation 'com.ironsource.adapters:pangleadapter:4.3.26'
+    appImplementation 'com.pangle.global:pag-sdk:7.5.0.2'
+    appLegacyLibImplementation 'com.pangle.global:ads-sdk:6.1.0.5'
+    // Add UnityAds Network
+    appImplementation 'com.unity3d.ads-mediation:unityads-adapter:4.3.59'
+    appLegacyLibImplementation 'com.ironsource.adapters:unityadsadapter:4.3.37'
+
+    // Chartboost
+    implementation project(':integrations:chartboost')
+    implementation libs.integrations.chartboost
+
+    // Unity Ads
+    implementation project(':integrations:unityads')
+    appImplementation libs.integrations.unityads
+    appLegacyLibImplementation'com.unity3d.ads:unity-ads:4.4.1'
+}

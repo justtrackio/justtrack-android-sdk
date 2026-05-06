@@ -1,0 +1,107 @@
+ext {
+    getVersionMajor = (def project) -> {
+        //getting the right android version code
+        def versionPropsFile = file("$project.rootDir/sdk/deployment/version.properties")
+
+        if (versionPropsFile.canRead()) {
+            Properties versionProps = new Properties()
+
+            versionProps.load(new FileInputStream(versionPropsFile))
+
+            versionProps['VERSION_MAJOR'].toInteger()
+        } else {
+            throw new RuntimeException("No $project.rootDir/sdk/deployment/version.properties found")
+        }
+    }
+
+    getVersionMinor = (def project) -> {
+        //getting the right android version name
+        def versionPropsFile = file("$project.rootDir/sdk/deployment/version.properties")
+
+        if (versionPropsFile.canRead()) {
+            Properties versionProps = new Properties()
+
+            versionProps.load(new FileInputStream(versionPropsFile))
+
+            versionProps['VERSION_MINOR'].toInteger()
+        } else {
+            throw new RuntimeException("No $project.rootDir/sdk/deployment/version.properties found")
+        }
+    }
+
+    getVersionPatch = (def project) -> {
+        //getting the right android version name
+        def versionPropsFile = file("$project.rootDir/sdk/deployment/version.properties")
+
+        if (versionPropsFile.canRead()) {
+            Properties versionProps = new Properties()
+
+            versionProps.load(new FileInputStream(versionPropsFile))
+
+            versionProps['VERSION_PATCH'].toInteger()
+        } else {
+            throw new RuntimeException("No $project.rootDir/sdk/deployment/version.properties found")
+        }
+    }
+
+    getVersionType = (def project) -> {
+        //getting the right android version name
+        def versionPropsFile = file("$project.rootDir/sdk/deployment/version.properties")
+
+        if (versionPropsFile.canRead()) {
+            Properties versionProps = new Properties()
+
+            versionProps.load(new FileInputStream(versionPropsFile))
+
+            versionProps['VERSION_TYPE'].toString()
+        } else {
+            throw new RuntimeException("No $project.rootDir/sdk/deployment/version.properties found")
+        }
+    }
+
+    versions = [
+            // External deps for SDK
+            kotlin: [
+                    groupId: "org.jetbrains.kotlin",
+                    artifactId: "kotlin-stdlib-jdk8",
+                    prefer: "1.9.20",
+                    range: "[1.8.0,2.1.0)",
+                    unityUpperBound: "2.0.20"
+            ],
+            coroutine: [
+                    groupId: "org.jetbrains.kotlinx",
+                    artifactId: "kotlinx-coroutines-android",
+                    prefer: "1.9.0",
+                    range: "[1.5.0, 1.10)",
+                    unityUpperBound: "1.9.0"
+            ],
+            integrity: [
+                    groupId: "com.google.android.play",
+                    artifactId: "integrity",
+                    prefer: "1.4.0",
+                    range: "[1.4.0, 2.0[",
+                    unityUpperBound: "2.0"
+            ],
+            lifecycle: [
+                    groupId: "androidx.lifecycle",
+                    artifactId: "lifecycle-process",
+                    prefer: "2.1.0",
+                    range: "[2.1.0, 3.0[",
+                    unityUpperBound: "2.7"
+            ],
+            adsIdentifier: [
+                    groupId: "com.google.android.gms",
+                    artifactId: "play-services-ads-identifier",
+                    prefer: "16.0.0",
+                    range: "[16.0.0, 19.0[",
+                    unityUpperBound: "19.0"
+            ],
+            appset: [
+                    groupId: "com.google.android.gms",
+                    artifactId: "play-services-appset",
+                    prefer: "16.0.0",
+                    range: "[16.0.0, 17.0[",
+                    unityUpperBound: "17.0"
+            ]
+    ]
+}

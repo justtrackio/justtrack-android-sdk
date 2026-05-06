@@ -1,0 +1,59 @@
+package io.justtrack
+
+import android.accounts.NetworkErrorException
+import io.justtrack.attribution.AdvertiserIdInfo
+import io.justtrack.log.Logger
+import io.justtrack.log.LoggerFieldsBuilder
+
+internal class FetchIpClaimTask(
+    private val deviceInfo: DeviceInfo,
+    private val advertiserId: AsyncFuture<AdvertiserIdInfo>,
+    private val httpClient: HttpClient,
+    private val logger: Logger,
+    private val protocol: IPProtocol,
+) : Task<String> {
+    override suspend fun execute(): String {
+        val connectionType = deviceInfo.getConnectionType()
+        val start = System.currentTimeMillis()
+        val advertiserIdValue = advertiserId.await().advertiserId
+
+        val result = httpClient.getSignedIpClaim(
+            logger,
+            protocol,
+            advertiserIdValue,
+        )
+
+        if (result.isSuccess) {
+            val response = result.getOrNull() ?: error("FetchIpClaimTask is successful with no result")
+            val parsedResponse = DTOSignIPResponse(response)
+            val millis = System.currentTimeMillis() - start
+            logger.publishMetric(
+                protocol.claimDurationMetric,
+                millis.toDouble(),
+                LoggerFieldsBuilder()
+                    .with("Network", connectionType.toString()),
+            )
+            logger.debug(
+                "Got IP claim",
+                LoggerFieldsBuilder()
+                    .with("ip", parsedResponse.ip)
+                    .with("type", parsedResponse.type),
+            )
+            return parsedResponse.token
+        } else {
+            val claimException = result.exceptionOrNull()
+            if (claimException != null) {
+                if (FetchClaimErrorClassifier.isCriticalException(claimException)) {
+                    logger.error(
+                        claimException.message ?: "Getting claim failed",
+                        claimException,
+                    )
+                }
+
+                throw claimException
+            } else {
+                throw NetworkErrorException("FetchIpClaimTask failed with unknown exception")
+            }
+        }
+    }
+}

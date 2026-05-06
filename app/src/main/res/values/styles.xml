@@ -1,0 +1,22 @@
+<resources>
+
+    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:colorBackground">@color/background</item>
+        <item name="colorPrimary">@color/primaryColor</item>
+        <item name="colorPrimaryDark">@color/primaryDarkColor</item>
+        <item name="colorSecondary">@color/secondaryColor</item>
+        <item name="colorAccent">@color/primaryLightColor</item>
+        <item name="colorControlNormal">@color/primaryColor</item>
+        <item name="colorControlActivated">@color/primaryColor</item>
+        <item name="colorControlHighlight">@color/primaryLightColor</item>
+        <item name="android:textColor">@color/primaryTextColor</item>
+        <item name="android:buttonStyle">@style/Button</item>
+        <item name="colorButtonNormal">@color/btn_background</item>
+    </style>
+
+    <style name="Button" parent="@style/Widget.AppCompat.Button">
+        <item name="android:textColor">@color/btn_text</item>
+        <item name="android:background">@drawable/ripple_effect</item>
+    </style>
+
+</resources>

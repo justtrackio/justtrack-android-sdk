@@ -1,0 +1,67 @@
+import org.gradle.api.initialization.resolve.RepositoriesMode
+
+pluginManagement {
+    def localProps = new Properties()
+    def localPropsFile = new File(settingsDir, "local.properties")
+    if (localPropsFile.exists()) {
+        localPropsFile.withInputStream { localProps.load(it) }
+    }
+
+    def requireLocalProp = { String key ->
+        def value = localProps.getProperty(key)
+        if (!value) {
+            throw new GradleException("$key missing in local.properties")
+        }
+        return value
+    }
+
+    settings.ext.mavenPublicUrl = requireLocalProp("mavenPublicUrl")
+    settings.ext.mavenPublicTestUrl = requireLocalProp("mavenPublicTestUrl")
+
+    repositories {
+        google()
+        mavenCentral()
+
+        gradlePluginPortal()
+    }
+
+    plugins {
+        id("com.android.application") version "8.7.3"
+        id("com.android.library") version "8.7.3"
+        id("org.jetbrains.kotlin.android") version "1.9.20"
+        id("org.jlleitschuh.gradle.ktlint") version "12.3.0"
+        id("com.google.gms.google-services") version "4.4.2"
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)
+    repositories {
+        google()
+        mavenCentral()
+        maven { url "https://plugins.gradle.org/m2/" }
+        maven { url 'https://sdk.justtrack.io/maven' }
+    }
+}
+
+def propagatedKeys = [
+        "mavenPublicUrl",
+        "mavenPublicTestUrl",
+]
+
+gradle.beforeProject { project ->
+    propagatedKeys.each { key ->
+        if (settings.ext.has(key) && !project.extensions.extraProperties.has(key)) {
+            project.extensions.extraProperties.set(key, settings.ext.get(key))
+        }
+    }
+}
+
+includeBuild('./proGuardGenerator')
+include ':app',
+        ':sdk',
+        ':integrations:applovin',
+        ':integrations:ironsource',
+        ':integrations:chartboost',
+        ':integrations:firebase',
+        ':integrations:unityads'

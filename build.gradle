@@ -1,0 +1,25 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+
+apply from: 'buildSystem/generateCode.gradle'
+apply from: 'buildSystem/version.gradle'
+ext.loadRequiredLocalProperties = { File rootDir ->
+    def localPropsFile = new File(rootDir, "local.properties")
+    if (!localPropsFile.exists()) {
+        throw new GradleException("local.properties missing in root project")
+    }
+    def properties = new Properties()
+    localPropsFile.withInputStream { properties.load(it) }
+    return properties
+}
+
+gradle.projectsEvaluated {
+    allprojects {
+        tasks.withType(JavaCompile).configureEach {
+            options.deprecation = false
+        }
+    }
+}
+
+tasks.register('clean', Delete) {
+    delete rootProject.buildDir
+}

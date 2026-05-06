@@ -1,0 +1,10 @@
+root = true
+
+[*.{kt,kts}]
+ktlint_code_style = android_studio
+max_line_length = 150
+ktlint_function_signature_body_expression_wrapping = default
+## require trailing comma
+ij_kotlin_allow_trailing_comma_on_call_site = true
+ij_kotlin_allow_trailing_comma = true
+ktlint_standard_import-ordering = disabled
