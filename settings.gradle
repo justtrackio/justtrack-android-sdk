@@ -24,14 +24,6 @@ pluginManagement {
 
         gradlePluginPortal()
     }
-
-    plugins {
-        id("com.android.application") version "8.7.3"
-        id("com.android.library") version "8.7.3"
-        id("org.jetbrains.kotlin.android") version "1.9.20"
-        id("org.jlleitschuh.gradle.ktlint") version "12.3.0"
-        id("com.google.gms.google-services") version "4.4.2"
-    }
 }
 
 dependencyResolutionManagement {
@@ -58,8 +50,13 @@ gradle.beforeProject { project ->
 }
 
 includeBuild('./proGuardGenerator')
-include ':app',
-        ':sdk',
+// Only include :app when building tracking-sdk standalone, not when included
+// as a composite build (e.g., from the example React Native app).
+if (gradle.parent == null) {
+    include ':app'
+}
+
+include ':sdk',
         ':integrations:applovin',
         ':integrations:ironsource',
         ':integrations:chartboost',

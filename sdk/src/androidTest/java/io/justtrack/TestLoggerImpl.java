@@ -58,11 +58,6 @@ public class TestLoggerImpl extends LoggerImpl implements HttpLogger {
     }
 
     @Override
-    public void setLogAndMetricRules(@NonNull DTOAttributionOutputSdkConfig config) {
-        // nop
-    }
-
-    @Override
     public void close() {
         // nop
     }

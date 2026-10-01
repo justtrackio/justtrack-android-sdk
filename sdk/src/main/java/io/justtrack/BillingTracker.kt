@@ -5,6 +5,7 @@ import androidx.core.util.Consumer
 import io.justtrack.events.Money
 import io.justtrack.log.Logger
 import io.justtrack.log.LoggerFieldsBuilder
+import io.justtrack.util.ExcludeFromJacocoGeneratedReport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -13,10 +14,12 @@ import java.lang.reflect.Method
 import java.lang.reflect.Proxy
 import java.util.concurrent.atomic.AtomicBoolean
 
+@ExcludeFromJacocoGeneratedReport
 internal abstract class BillingTracker(
-    private val sdk: BaseJustTrackSdk,
+    private val sdk: JustTrackSdkImpl,
     private val context: Context,
     protected val logger: Logger,
+    protected val billingVersion: BillingTrackerFactory.BillingVersion,
 ) {
     protected lateinit var billingClient: Any
     private val isTracking = AtomicBoolean(false)
@@ -89,17 +92,20 @@ internal abstract class BillingTracker(
     private fun initializeBillingClient() {
         try {
             val billingClientClass = Class.forName("com.android.billingclient.api.BillingClient")
-            var billingClientBuilder = billingClientClass.getMethod("newBuilder", Context::class.java)
-                .invoke(billingClientClass, context)
+            var billingClientBuilder =
+                billingClientClass.getMethod("newBuilder", Context::class.java)
+                    .invoke(billingClientClass, context)
+                    ?: error("BillingClient.newBuilder returned null")
 
             val purchaseListenerClass = Class.forName("com.android.billingclient.api.PurchasesUpdatedListener")
             val purchaseListener = createPurchaseListenerInstance(purchaseListenerClass)
 
             val setPurchaseListenerMethod = billingClientBuilder.javaClass.getMethod("setListener", purchaseListenerClass)
-            billingClientBuilder = setPurchaseListenerMethod.invoke(billingClientBuilder, purchaseListener)
+            billingClientBuilder =
+                setPurchaseListenerMethod.invoke(billingClientBuilder, purchaseListener)
+                    ?: error("BillingClient.Builder.setListener returned null")
 
-            val enablePendingPurchaseMethod = billingClientBuilder.javaClass.getMethod("enablePendingPurchases")
-            billingClientBuilder = enablePendingPurchaseMethod.invoke(billingClientBuilder)
+            billingClientBuilder = enablePendingPurchases(billingClientBuilder)
 
             val buildMethod = billingClientBuilder.javaClass.getMethod("build")
             val billingClient = buildMethod.invoke(billingClientBuilder)
@@ -120,12 +126,41 @@ internal abstract class BillingTracker(
         }
     }
 
+    private fun enablePendingPurchases(billingClientBuilder: Any): Any {
+        if (billingVersion != BillingTrackerFactory.BillingVersion.VERSION_8) {
+            return billingClientBuilder.javaClass.getMethod("enablePendingPurchases")
+                .invoke(billingClientBuilder)
+                ?: error("BillingClient.Builder.enablePendingPurchases returned null")
+        }
+
+        val pendingPurchasesParamsClass =
+            Class.forName("com.android.billingclient.api.PendingPurchasesParams")
+        var pendingPurchasesParamsBuilder =
+            pendingPurchasesParamsClass.getMethod("newBuilder").invoke(pendingPurchasesParamsClass)
+                ?: error("PendingPurchasesParams.newBuilder returned null")
+        pendingPurchasesParamsBuilder =
+            pendingPurchasesParamsBuilder.javaClass.getMethod("enableOneTimeProducts")
+                .invoke(pendingPurchasesParamsBuilder)
+                ?: error("PendingPurchasesParams.Builder.enableOneTimeProducts returned null")
+        val pendingPurchasesParams =
+            pendingPurchasesParamsBuilder.javaClass.getMethod("build")
+                .invoke(pendingPurchasesParamsBuilder)
+                ?: error("PendingPurchasesParams.Builder.build returned null")
+
+        return billingClientBuilder.javaClass.getMethod(
+            "enablePendingPurchases",
+            pendingPurchasesParamsClass,
+        ).invoke(billingClientBuilder, pendingPurchasesParams)
+            ?: error("BillingClient.Builder.enablePendingPurchases returned null")
+    }
+
     @Throws(Exception::class)
     private fun createPurchaseListenerInstance(purchaseListener: Class<*>): Any {
         val implementsClasses = arrayOf(purchaseListener)
         val listener = Proxy.newProxyInstance(
             purchaseListener.classLoader,
             implementsClasses,
+            @ExcludeFromJacocoGeneratedReport
             object : InvocationHandler {
                 override fun invoke(proxy: Any?, method: Method?, args: Array<out Any>?): Any? {
                     if (method == null) {
@@ -255,6 +290,7 @@ internal abstract class BillingTracker(
         return Proxy.newProxyInstance(
             startListenerClass.classLoader,
             implementsClasses,
+            @ExcludeFromJacocoGeneratedReport
             object : InvocationHandler {
                 override fun invoke(proxy: Any?, method: Method?, args: Array<out Any>?): Any? {
                     if (method == null) return null
@@ -333,7 +369,7 @@ internal abstract class BillingTracker(
     }
 
     private fun logTransaction(productType: ProductType, purchase: ProductPurchase, productDetails: ProductDetail) {
-        CoroutineScope(Dispatchers.IO).launch {
+        CoroutineScope(Dispatchers.IO).launch @ExcludeFromJacocoGeneratedReport {
             val purchaseHistory = checkPurchaseHistory(purchase.purchaseToken)
             val billingVersion = BillingTrackerFactory.getBillingClientVersion()
             val log = LoggerFieldsBuilder()

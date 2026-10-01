@@ -1,5 +1,48 @@
 # justtrack SDK Changelog (Android)
 
+##  Version 8.0.0 (Sep 15, 2026)
+
+- Promoted `8.0.0-rc3` to stable. This release includes all changes documented in `8.0.0-rc1` through `8.0.0-rc3`, with no additional changes.
+
+##  Version 8.0.0-rc3 (Sep 02, 2026)
+
+- Fixed the SDK being unable to send any data when the app name, app version, or device model contains non-ASCII characters.
+
+##  Version 8.0.0-rc2 (Aug 11, 2026)
+
+- Fixed the return types of `track()`, `publishEvent()`, and `forwardAdImpression()` to correctly use `AsyncFuture<Void?>`.
+
+##  Version 8.0.0-rc1 (Aug 03, 2026)
+
+- Added persistent global event dimensions through `setGlobalDimension0()`, `setGlobalDimension1()`, and `setGlobalDimension2()`.
+- Added opt-in connection tracking through `JustTrackSdkBuilder.setEnableConnectionTracking()`, which attaches the `jt_connection_type` dimension to events.
+- Added `JtPurchaseEvent.Action` and constructor overloads for purchase view and click events.
+- `Campaign.id` now exposes the external campaign ID as a `String` instead of the internal numeric ID.
+- Remote config now fetches at most once per hour by default instead of once per day, and only pending experiment assignments are activated.
+- Builder methods now return `JustTrackSdkBuilder` directly instead of the removed `SdkBuilder` interface.
+- `setExperimentVariant()` now requires non-null experiment, variant, and tags-list arguments.
+- Updated the IronSource integration adapter to 3.0.0 and migrated it to the Unity LevelPlay 3.x API. `IronSourceIntegrationAdapter` no longer accepts a user ID in its constructor.
+- Removed the deprecated `JustTrackSdk.getTestGroupId()` method.
+- Removed the `SdkBuilder` interface and its deprecated `setEnableBroadcastReceiver()` method.
+- Removed `Attribution.type`; use `Attribution.campaign.type` for the campaign type.
+- Removed Adjoe integration.
+- Added the JSON `Content-Type` header to HTTP POST requests.
+
+##  Version 7.1.3 (Jul 23, 2026)
+
+- Fixed background service reporting an incorrect SDK version.
+
+##  Version 7.1.2 (Jun 17, 2026)
+
+- Allow background sync scheduling without successful attribution.
+
+##  Version 7.1.1 (Jun 08, 2026)
+
+### Added
+
+- Added background syncing of events.
+- The SDK now removes stale assignments after `.fetch()` completes.
+
 ##  Version 7.1.0 (Mar 06, 2026)
 
 ### Added

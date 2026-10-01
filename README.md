@@ -6,11 +6,11 @@ You can find the complete documentation at <https://docs.justtrack.io/sdk/overvi
 
 ## Requirements
 
-| Property    | Version          |
-|-------------|------------------|
-| Min SDK     | 21 (Android 5.0) |
-| Compile SDK | 35               |
-| Kotlin      | 1.9.20           |
+| Property | Version |
+|---|---|
+| Min SDK | 21 (Android 5.0) |
+| Compile SDK | 35 |
+| Kotlin | 1.9.20 |
 
 ## Installation
 

@@ -2,6 +2,8 @@ package io.justtrack;
 
 import androidx.annotation.NonNull;
 
+import io.justtrack.dtos.DTOLogMetric;
+
 class LogStoreMetric extends DTOLogMetric implements LogStoreDatum {
     private final long id;
 

@@ -24,7 +24,7 @@ internal class AppEventDTOTest : BaseDTOTest() {
             .build("session id", sdkVersion)
 
         val eventId = UUID.randomUUID()
-        val publishingEvent = PublishingEvent(1, eventId, userEvent, 1)
+        val publishingEvent = StorableEvent(1, eventId, userEvent, 1)
         val json = build(
             listOf(publishingEvent),
             deviceInfoImpl,

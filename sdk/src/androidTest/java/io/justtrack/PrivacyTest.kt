@@ -4,11 +4,13 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import io.justtrack.api.DefaultAttributionApi
 import io.justtrack.database.Database
+import io.justtrack.dtos.DTOPublishCustomUserIdRequest
+import io.justtrack.dtos.DTOPublishFirebaseAppInstanceIdRequest
 import io.justtrack.events.JtAppOpenEvent
 import io.justtrack.events.TimeUnitGroup
 import io.justtrack.exceptions.SdkNotTrackingException
-import io.justtrack.log.Logger
 import io.justtrack.util.ExecutorServiceFactory
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.TimeoutCancellationException
@@ -40,14 +42,13 @@ class PrivacyTest {
     @Throws(Exception::class)
     fun publishingEventWithPrivacy() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val httpClient: HttpClient = BaseTestHttpClient()
         val executorBuilder = ExecutorServiceFactory {
             val executor = ThreadPoolExecutor(10, 10, 60L, TimeUnit.SECONDS, LinkedBlockingDeque())
             executor.allowCoreThreadTimeOut(true)
             executor
         }
 
-        val sdk = TestSdk(context, executorBuilder, httpClient, false)
+        val sdk = TestSdk(context, executorBuilder, false)
         try {
             sdk.publishEvent(JtAppOpenEvent("sessionId", 1.0, TimeUnitGroup.MILLISECONDS, Date())).await()
             Assert.fail("Should failed.")
@@ -75,13 +76,12 @@ class PrivacyTest {
     @Test
     fun startMultipleTimeTest() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val httpClient: HttpClient = BaseTestHttpClient()
         val executorBuilder = ExecutorServiceFactory {
             val executor = ThreadPoolExecutor(10, 10, 60L, TimeUnit.SECONDS, LinkedBlockingDeque())
             executor.allowCoreThreadTimeOut(true)
             executor
         }
-        val sdk = TestSdk(context, executorBuilder, httpClient, false)
+        val sdk = TestSdk(context, executorBuilder, false)
 
         sdk.start()
         sdk.stop()
@@ -110,8 +110,7 @@ class PrivacyTest {
     @Test
     fun configurationEnablingTest() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val httpClient = ConfigurationTestHttpClient()
-
+        val apis = ConfigurationTestApi()
         val userId = UUID.randomUUID()
         val firebaseId = UUID.randomUUID()
         val trackingId = UUID.randomUUID()
@@ -121,18 +120,18 @@ class PrivacyTest {
             executor.allowCoreThreadTimeOut(true)
             executor
         }
-        val sdk = TestSdk(context, executorBuilder, httpClient, false)
+        val sdk = TestSdk(context, executorBuilder, false, attributionApi = apis)
         val configurationBuilder = JustTrackSdkConfig.Builder()
             .withUserId(userId.toString())
             .withFirebaseIntegration(firebaseId.toString())
             .withTrackingId(trackingId.toString(), trackingProvider)
             .build()
-        sdk.start(configurationBuilder)
+        sdk.startWithConfig(configurationBuilder)
 
-        val trackedCustomId = httpClient.trackedCustomId
+        val trackedCustomId = apis.trackedCustomId
         Assert.assertEquals(userId.toString(), trackedCustomId.await())
 
-        val trackedFirebaseId = httpClient.firebaseId
+        val trackedFirebaseId = apis.firebaseId
         Assert.assertEquals(firebaseId.toString(), trackedFirebaseId.await())
 
         Assert.assertEquals(sdk.trackingId.toString(), trackingId.toString())
@@ -142,20 +141,20 @@ class PrivacyTest {
     @Test
     fun configurationDisablingTest() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val httpClient = ConfigurationTestHttpClient()
+        val api = ConfigurationTestApi()
 
         val executorBuilder = ExecutorServiceFactory {
             val executor = ThreadPoolExecutor(10, 10, 60L, TimeUnit.SECONDS, LinkedBlockingDeque())
             executor.allowCoreThreadTimeOut(true)
             executor
         }
-        val sdk = TestSdk(context, executorBuilder, httpClient, false)
+        val sdk = TestSdk(context, executorBuilder, false, attributionApi = api)
         val configurationBuilder = JustTrackSdkConfig.Builder().build()
-        sdk.start(configurationBuilder)
+        sdk.startWithConfig(configurationBuilder)
 
         try {
             withTimeout(100) {
-                httpClient.trackedCustomId.await()
+                api.trackedCustomId.await()
                 Assert.fail()
             }
         } catch (e: TimeoutCancellationException) {
@@ -164,7 +163,7 @@ class PrivacyTest {
 
         try {
             withTimeout(100) {
-                httpClient.firebaseId.await()
+                api.firebaseId.await()
                 Assert.fail()
             }
         } catch (e: TimeoutCancellationException) {
@@ -179,15 +178,14 @@ class PrivacyTest {
     @Test(timeout = 10_000L)
     fun publishingEventEdgeScenarioTest() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val httpClient: HttpClient = BaseTestHttpClient()
         val executorBuilder = ExecutorServiceFactory {
             val executor = ThreadPoolExecutor(10, 10, 60L, TimeUnit.SECONDS, LinkedBlockingDeque())
             executor.allowCoreThreadTimeOut(true)
             executor
         }
 
-        val publishingResult: ArrayList<AsyncFuture<Void>> = ArrayList()
-        val sdk = TestSdk(context, executorBuilder, httpClient, false)
+        val publishingResult: ArrayList<AsyncFuture<Void?>> = ArrayList()
+        val sdk = TestSdk(context, executorBuilder, false)
         sdk.start()
         try {
             publishingResult.add(sdk.publishEvent(AppEvent("event1")))
@@ -204,30 +202,23 @@ class PrivacyTest {
         }
     }
 
-    private class ConfigurationTestHttpClient : BaseTestHttpClient() {
+    private class ConfigurationTestApi : DefaultAttributionApi() {
         val trackedCustomId = CompletableDeferred<String>()
         val firebaseId = CompletableDeferred<String>()
         override suspend fun sendCustomUserId(
-            logger: Logger,
             body: DTOPublishCustomUserIdRequest,
             advertiserId: String?,
             uuid: String,
             installId: String,
         ): Result<Unit> {
             trackedCustomId.complete(body.customUserId)
-            return super.sendCustomUserId(logger, body, advertiserId, uuid, installId)
+            return super.sendCustomUserId(body, advertiserId, uuid, installId)
         }
 
-        override suspend fun sendFirebaseAppInstanceId(
-            logger: Logger,
-            body: JSONEncodable,
-            advertiserId: String?,
-            uuid: String,
-            installId: String,
-        ): Result<Unit> {
+        override suspend fun sendFirebaseAppInstanceId(body: JSONEncodable, advertiserId: String?, uuid: String, installId: String): Result<Unit> {
             val bodyDTO = body as DTOPublishFirebaseAppInstanceIdRequest
             firebaseId.complete(bodyDTO.firebaseInstanceId)
-            return super.sendFirebaseAppInstanceId(logger, body, advertiserId, uuid, installId)
+            return super.sendFirebaseAppInstanceId(body, advertiserId, uuid, installId)
         }
     }
 }

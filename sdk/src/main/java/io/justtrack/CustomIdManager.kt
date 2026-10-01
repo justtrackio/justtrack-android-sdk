@@ -2,17 +2,20 @@ package io.justtrack
 
 import android.content.Context
 import io.justtrack.CustomUserIdStore.Companion.getInstance
-import io.justtrack.attribution.AdvertiserIdInfo
+import io.justtrack.api.AttributionApi
+import io.justtrack.api.AttributionApiImpl
 import io.justtrack.exceptions.InvalidFieldException
+import io.justtrack.executor.TaskExecutor
 import io.justtrack.log.Logger
 import io.justtrack.log.LoggerFields
 import io.justtrack.log.LoggerFieldsBuilder
+import io.justtrack.providers.AdvertiserIdProvider
 
 internal class CustomIdManager(
     private val context: Context,
     private val taskExecutor: TaskExecutor,
     private val deviceInfo: DeviceInfo,
-    private val httpClient: HttpClient,
+    private val attributionApi: AttributionApi,
     private val logger: Logger,
     private val networkErrorLogger: NetworkErrorLogger,
 ) {
@@ -22,7 +25,7 @@ internal class CustomIdManager(
         customId: String,
         userId: AsyncFuture<String>,
         attributionIdManager: AttributionIdManager,
-        advertiserIdInfo: AsyncFuture<AdvertiserIdInfo>,
+        advertiserIdProvider: AdvertiserIdProvider,
     ): AsyncFuture<Boolean> {
         if (!Validation.validUserId(customId)) {
             val exception = InvalidFieldException("customUserId", customId, 1, MAX_CUSTOM_ID_LENGTH, "ASCII")
@@ -30,12 +33,12 @@ internal class CustomIdManager(
 
             return ErrorFuture(exception)
         }
-        return taskExecutor.executeAsFuture(
+        return taskExecutor.executeFuture(
             setCustomUserIdTask(
                 customId,
                 userId,
                 attributionIdManager,
-                advertiserIdInfo,
+                advertiserIdProvider,
             ),
         )
     }
@@ -45,26 +48,24 @@ internal class CustomIdManager(
         customUserId: String,
         userIdFuture: AsyncFuture<String>,
         attributionIdManager: AttributionIdManager,
-        advertiserIdInfoFuture: AsyncFuture<AdvertiserIdInfo>,
+        advertiserIdProvider: AdvertiserIdProvider,
         reason: String,
     ): AsyncFuture<Boolean> {
-        return taskExecutor.executeAsFuture(
+        return taskExecutor.executeFuture(
             FixedRetryingTask(
                 PublishCustomUserIdTask(
                     context,
                     attributionIdManager,
                     logger,
                     networkErrorLogger,
-                    httpClient,
-                    customUserId,
+                    attributionApi,
                     reason,
-                    userIdFuture,
-                    advertiserIdInfoFuture,
+                    PublishCustomUserIdTask.AttributionParams(customUserId, userIdFuture, advertiserIdProvider),
                 ),
                 deviceInfo,
                 logger,
                 TrackingEventErrorClassifier.instance,
-                HttpClientImpl.SEND_CUSTOM_USER_ID_REQUEST_NAME,
+                AttributionApiImpl.SEND_CUSTOM_USER_ID_REQUEST_NAME,
                 FixedRetryingTask.DEFAULT_RETRY_DELAYS,
             ),
         )
@@ -74,7 +75,7 @@ internal class CustomIdManager(
         customId: String,
         userIdFuture: AsyncFuture<String>,
         attributionIdManager: AttributionIdManager,
-        advertiserIdInfoFuture: AsyncFuture<AdvertiserIdInfo>,
+        advertiserIdProvider: AdvertiserIdProvider,
     ) = object : Task<Boolean> {
         override suspend fun execute(): Boolean {
             val installId = attributionIdManager.getOrCreateInstallId().await()
@@ -91,7 +92,7 @@ internal class CustomIdManager(
                 customId,
                 userIdFuture,
                 attributionIdManager,
-                advertiserIdInfoFuture,
+                advertiserIdProvider,
                 PersistentIdStore.REASON_SEND,
             ).await()
         }

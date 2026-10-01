@@ -1,10 +1,12 @@
 package io.justtrack
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert
 import org.junit.Test
-import java.util.concurrent.ArrayBlockingQueue
-import java.util.concurrent.BlockingQueue
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.RunnableFuture
 import java.util.concurrent.TimeUnit
@@ -14,7 +16,7 @@ class TaskFutureTest {
     @Test
     @Throws(Throwable::class)
     fun simpleTest() {
-        runTestInThread {
+        runTestInCoroutine {
             val task = TaskFuture(
                 object : Task<String> {
                     override suspend fun execute(): String {
@@ -50,7 +52,7 @@ class TaskFutureTest {
     @Test
     @Throws(Throwable::class)
     fun executeThrows() {
-        runTestInThread {
+        runTestInCoroutine {
             val task = TaskFuture(
                 object : Task<String> {
                     override suspend fun execute(): String {
@@ -58,7 +60,7 @@ class TaskFutureTest {
                     }
                 },
             )
-            task.execute()
+            task.run()
             assertThrow(task)
         }
     }
@@ -66,7 +68,7 @@ class TaskFutureTest {
     @Test
     @Throws(Throwable::class)
     fun delayedTest() {
-        runTestInThread {
+        runTestInCoroutine {
             val task = TaskFuture(
                 object : Task<String> {
                     override suspend fun execute(): String {
@@ -76,13 +78,13 @@ class TaskFutureTest {
                     }
                 },
             )
-            // start execution
-            task.execute()
+            // start execution in a separate coroutine so get() can time out
+            launch(Dispatchers.IO) { task.run() }
             try {
                 task.get(100, TimeUnit.MILLISECONDS)
                 Assert.fail("Should not have reached here")
             } catch (e: TimeoutException) {
-                // successful got the timeout
+                // successfully got the timeout
             }
             Assert.assertEquals("success", task.get())
         }
@@ -91,7 +93,7 @@ class TaskFutureTest {
     @Test
     @Throws(Throwable::class)
     fun delayedReject() {
-        runTestInThread {
+        runTestInCoroutine {
             val task = TaskFuture(
                 object : Task<String> {
                     override suspend fun execute(): String {
@@ -101,26 +103,26 @@ class TaskFutureTest {
                     }
                 },
             )
-            // start execution
-            task.execute()
+            // start execution in a separate coroutine so get() can time out
+            launch(Dispatchers.IO) { task.run() }
             try {
                 task.get(100, TimeUnit.MILLISECONDS)
                 Assert.fail("Should not have reached here")
             } catch (e: TimeoutException) {
-                // successful got the timeout
+                // successfully got the timeout
             }
             assertThrow(task)
         }
     }
 
     @Throws(Throwable::class)
-    private fun runTestInThread(test: Runnable) {
+    private fun runTestInCoroutine(test: suspend CoroutineScope.() -> Unit) {
         ThreadUtils.initTest()
-        val results: BlockingQueue<Throwable> = ArrayBlockingQueue(1)
+        val results = java.util.concurrent.ArrayBlockingQueue<Throwable>(1)
         val sentinel: Throwable = RuntimeException()
         Thread {
             try {
-                test.run()
+                runBlocking(block = test)
             } catch (e: Throwable) {
                 results.add(e)
                 return@Thread

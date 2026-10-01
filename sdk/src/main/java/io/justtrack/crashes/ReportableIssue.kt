@@ -27,7 +27,8 @@ internal open class ReportableIssue(
             fields.with("stack_trace", combineStackTrace)
             logger.info("Application crash dropped at reportCrash", fields)
         } else {
-            val fields = LoggerFieldsBuilder().with("type", crashType?.name ?: CrashType.NORMAL_CRASH.toString())
+            val crashTypeName = if (crashType != null) crashType.name else CrashType.NORMAL_CRASH.toString()
+            val fields = LoggerFieldsBuilder().with("type", crashTypeName)
             logger.publishMetric(
                 Metric("crash"),
                 1.0,

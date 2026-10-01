@@ -2,16 +2,14 @@ package io.justtrack.database
 
 import android.content.ContentValues
 import android.database.Cursor
-import android.database.sqlite.SQLiteDatabase
 import io.justtrack.AttributionDAOImpl.Companion.ATTRIBUTION_ADSET_ID
-import io.justtrack.AttributionDAOImpl.Companion.ATTRIBUTION_CAMPAIGN_ID
+import io.justtrack.AttributionDAOImpl.Companion.ATTRIBUTION_CAMPAIGN_EXTERNAL_ID
 import io.justtrack.AttributionDAOImpl.Companion.ATTRIBUTION_CAMPAIGN_NAME
 import io.justtrack.AttributionDAOImpl.Companion.ATTRIBUTION_CAMPAIGN_ORGANIC
 import io.justtrack.AttributionDAOImpl.Companion.ATTRIBUTION_CAMPAIGN_TYPE
 import io.justtrack.AttributionDAOImpl.Companion.ATTRIBUTION_CHANNEL_ID
 import io.justtrack.AttributionDAOImpl.Companion.ATTRIBUTION_CHANNEL_INCENT
 import io.justtrack.AttributionDAOImpl.Companion.ATTRIBUTION_CHANNEL_NAME
-import io.justtrack.AttributionDAOImpl.Companion.ATTRIBUTION_CONFIG
 import io.justtrack.AttributionDAOImpl.Companion.ATTRIBUTION_CREATED_AT
 import io.justtrack.AttributionDAOImpl.Companion.ATTRIBUTION_DATA_VERSION
 import io.justtrack.AttributionDAOImpl.Companion.ATTRIBUTION_FIRST_ATTRIBUTION_AT
@@ -31,11 +29,9 @@ import io.justtrack.AttributionDAOImpl.Companion.ATTRIBUTION_REDOWNLOAD
 import io.justtrack.AttributionDAOImpl.Companion.ATTRIBUTION_SOURCE_BUNDLE_ID
 import io.justtrack.AttributionDAOImpl.Companion.ATTRIBUTION_SOURCE_ID
 import io.justtrack.AttributionDAOImpl.Companion.ATTRIBUTION_SOURCE_PLACEMENT
-import io.justtrack.AttributionDAOImpl.Companion.ATTRIBUTION_TEST_GROUP
 import io.justtrack.AttributionDAOImpl.Companion.ATTRIBUTION_TYPE
 import io.justtrack.AttributionDAOImpl.Companion.ATTRIBUTION_USER_ID
 import io.justtrack.AttributionDAOImpl.Companion.ATTRIBUTION_USER_TYPE
-import io.justtrack.database.Database.Companion.ATTRIBUTION_TABLE_NAME
 import io.justtrack.getIntOrNull
 import io.justtrack.getLongOrNull
 import io.justtrack.getStringOrNull
@@ -47,7 +43,7 @@ internal data class AttributionEntity internal constructor(
     internal val userId: String?,
     internal val installId: String?,
     internal val userType: String?,
-    internal val campaignId: Int?,
+    internal val campaignExternalId: String?,
     internal val campaignName: String?,
     internal val campaignType: String?,
     internal val isCampaignOrganic: Int?,
@@ -66,11 +62,9 @@ internal data class AttributionEntity internal constructor(
     internal val installAppVersionCode: String?,
     internal val lastAppVersion: String?,
     internal val lastAppVersionCode: String?,
-    internal val testGroup: Int?,
     internal val firstAttributionAt: Long?,
     internal val lastAttributionAt: Long?,
     internal val lastOpenAt: Long?,
-    internal val sdkConfig: String?,
     internal val redownload: Int?,
     internal val isIntegrityTokenSent: Int?,
     internal val integritySecret: String?,
@@ -82,7 +76,7 @@ internal data class AttributionEntity internal constructor(
         userId = cursor.getStringOrNull(ATTRIBUTION_USER_ID),
         installId = cursor.getStringOrNull(ATTRIBUTION_INSTALL_ID),
         userType = cursor.getStringOrNull(ATTRIBUTION_USER_TYPE),
-        campaignId = cursor.getIntOrNull(ATTRIBUTION_CAMPAIGN_ID),
+        campaignExternalId = cursor.getStringOrNull(ATTRIBUTION_CAMPAIGN_EXTERNAL_ID),
         campaignName = cursor.getStringOrNull(ATTRIBUTION_CAMPAIGN_NAME),
         campaignType = cursor.getStringOrNull(ATTRIBUTION_CAMPAIGN_TYPE),
         isCampaignOrganic = cursor.getIntOrNull(ATTRIBUTION_CAMPAIGN_ORGANIC),
@@ -101,35 +95,15 @@ internal data class AttributionEntity internal constructor(
         installAppVersionCode = cursor.getStringOrNull(ATTRIBUTION_INSTALL_APP_VERSION_CODE),
         lastAppVersion = cursor.getStringOrNull(ATTRIBUTION_LAST_APP_VERSION),
         lastAppVersionCode = cursor.getStringOrNull(ATTRIBUTION_LAST_APP_VERSION_CODE),
-        testGroup = cursor.getIntOrNull(ATTRIBUTION_TEST_GROUP),
         firstAttributionAt = cursor.getLongOrNull(ATTRIBUTION_FIRST_ATTRIBUTION_AT),
         lastAttributionAt = cursor.getLongOrNull(ATTRIBUTION_LAST_ATTRIBUTION_AT),
         lastOpenAt = cursor.getLongOrNull(ATTRIBUTION_LAST_OPEN_AT),
-        sdkConfig = cursor.getStringOrNull(ATTRIBUTION_CONFIG),
         redownload = cursor.getIntOrNull(ATTRIBUTION_REDOWNLOAD),
         isIntegrityTokenSent = cursor.getIntOrNull(ATTRIBUTION_IS_INTEGRITY_TOKEN_SENT),
         integritySecret = cursor.getStringOrNull(ATTRIBUTION_INTEGRITY_SECRET),
     )
 
-    internal constructor(database: SQLiteDatabase) : this(
-        database.query(
-            ATTRIBUTION_TABLE_NAME,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-        ).use { cursor ->
-            if (cursor.moveToFirst()) {
-                AttributionEntity(cursor)
-            } else {
-                AttributionEntity()
-            }
-        },
-    )
-
-    private constructor() : this(
+    internal constructor() : this(
         null,
         null,
         null,
@@ -160,43 +134,6 @@ internal data class AttributionEntity internal constructor(
         null,
         null,
         null,
-        null,
-        null,
-    )
-
-    internal constructor(entity: AttributionEntity) : this(
-        isCreateFinished = entity.isCreateFinished,
-        version = entity.version,
-        userId = entity.userId,
-        installId = entity.installId,
-        userType = entity.userType,
-        campaignId = entity.campaignId,
-        campaignName = entity.campaignName,
-        campaignType = entity.campaignType,
-        isCampaignOrganic = entity.isCampaignOrganic,
-        type = entity.type,
-        channelId = entity.channelId,
-        channelName = entity.channelName,
-        channelIncent = entity.channelIncent,
-        partnerId = entity.partnerId,
-        partnerName = entity.partnerName,
-        sourceId = entity.sourceId,
-        sourceBundleId = entity.sourceBundleId,
-        sourcePlacement = entity.sourcePlacement,
-        adsetId = entity.adsetId,
-        createdAt = entity.createdAt,
-        installAppVersion = entity.installAppVersion,
-        installAppVersionCode = entity.installAppVersionCode,
-        lastAppVersion = entity.lastAppVersion,
-        lastAppVersionCode = entity.lastAppVersionCode,
-        testGroup = entity.testGroup,
-        firstAttributionAt = entity.firstAttributionAt,
-        lastAttributionAt = entity.lastAttributionAt,
-        lastOpenAt = entity.lastOpenAt,
-        sdkConfig = entity.sdkConfig,
-        redownload = entity.redownload,
-        isIntegrityTokenSent = entity.isIntegrityTokenSent,
-        integritySecret = entity.integritySecret,
     )
 
     internal constructor(map: Map<String, *>) : this(
@@ -205,7 +142,7 @@ internal data class AttributionEntity internal constructor(
         userId = map[ATTRIBUTION_USER_ID] as String?,
         installId = map[ATTRIBUTION_INSTALL_ID] as String?,
         userType = map[ATTRIBUTION_USER_TYPE] as String?,
-        campaignId = map[ATTRIBUTION_CAMPAIGN_ID] as Int?,
+        campaignExternalId = map[ATTRIBUTION_CAMPAIGN_EXTERNAL_ID] as String?,
         campaignName = map[ATTRIBUTION_CAMPAIGN_NAME] as String?,
         campaignType = map[ATTRIBUTION_CAMPAIGN_TYPE] as String?,
         isCampaignOrganic = (map[ATTRIBUTION_CAMPAIGN_ORGANIC] as Boolean?)?.toInt(),
@@ -224,11 +161,9 @@ internal data class AttributionEntity internal constructor(
         installAppVersionCode = map[ATTRIBUTION_INSTALL_APP_VERSION_CODE] as String?,
         lastAppVersion = map[ATTRIBUTION_LAST_APP_VERSION] as String?,
         lastAppVersionCode = map[ATTRIBUTION_LAST_APP_VERSION_CODE] as String?,
-        testGroup = map[ATTRIBUTION_TEST_GROUP] as Int?,
         firstAttributionAt = map[ATTRIBUTION_FIRST_ATTRIBUTION_AT] as Long?,
         lastAttributionAt = map[ATTRIBUTION_LAST_ATTRIBUTION_AT] as Long?,
         lastOpenAt = map[ATTRIBUTION_LAST_OPEN_AT] as Long?,
-        sdkConfig = map[ATTRIBUTION_CONFIG] as String?,
         redownload = (map[ATTRIBUTION_REDOWNLOAD] as Boolean?)?.toInt(),
         isIntegrityTokenSent = map[ATTRIBUTION_IS_INTEGRITY_TOKEN_SENT] as Int?,
         integritySecret = map[ATTRIBUTION_INTEGRITY_SECRET] as String?,
@@ -241,7 +176,7 @@ internal data class AttributionEntity internal constructor(
             put(ATTRIBUTION_USER_ID, userId)
             put(ATTRIBUTION_INSTALL_ID, installId)
             put(ATTRIBUTION_USER_TYPE, userType)
-            put(ATTRIBUTION_CAMPAIGN_ID, campaignId)
+            put(ATTRIBUTION_CAMPAIGN_EXTERNAL_ID, campaignExternalId)
             put(ATTRIBUTION_CAMPAIGN_NAME, campaignName)
             put(ATTRIBUTION_CAMPAIGN_TYPE, campaignType)
             put(ATTRIBUTION_CAMPAIGN_ORGANIC, isCampaignOrganic)
@@ -260,11 +195,9 @@ internal data class AttributionEntity internal constructor(
             put(ATTRIBUTION_INSTALL_APP_VERSION_CODE, installAppVersionCode)
             put(ATTRIBUTION_LAST_APP_VERSION, lastAppVersion)
             put(ATTRIBUTION_LAST_APP_VERSION_CODE, lastAppVersionCode)
-            put(ATTRIBUTION_TEST_GROUP, testGroup)
             put(ATTRIBUTION_FIRST_ATTRIBUTION_AT, firstAttributionAt)
             put(ATTRIBUTION_LAST_ATTRIBUTION_AT, lastAttributionAt)
             put(ATTRIBUTION_LAST_OPEN_AT, lastOpenAt)
-            put(ATTRIBUTION_CONFIG, sdkConfig)
             put(ATTRIBUTION_REDOWNLOAD, redownload)
             put(ATTRIBUTION_IS_INTEGRITY_TOKEN_SENT, isIntegrityTokenSent)
             put(ATTRIBUTION_INTEGRITY_SECRET, integritySecret)
@@ -276,41 +209,5 @@ internal data class AttributionEntity internal constructor(
      */
     internal fun isMigrated(): Boolean {
         return userId != null || installId != null
-    }
-
-    override fun toString(): String {
-        return "AttributionEntity(" +
-            "isCreateFinished=$isCreateFinished, " +
-            "version=$version, " +
-            "userId=$userId, " +
-            "installId=$installId, " +
-            "userType=$userType, " +
-            "campaignId=$campaignId, " +
-            "campaignName=$campaignName, " +
-            "campaignType=$campaignType, " +
-            "isCampaignOrganic=$isCampaignOrganic, " +
-            "type=$type, " +
-            "channelId=$channelId, " +
-            "channelName=$channelName, " +
-            "channelIncent=$channelIncent, " +
-            "partnerId=$partnerId, " +
-            "partnerName=$partnerName, " +
-            "sourceId=$sourceId, " +
-            "sourceBundleId=$sourceBundleId, " +
-            "sourcePlacement=$sourcePlacement, " +
-            "adsetId=$adsetId, " +
-            "createdAt=$createdAt, " +
-            "installAppVersion=$installAppVersion, " +
-            "installAppVersionCode=$installAppVersionCode, " +
-            "lastAppVersion=$lastAppVersion, " +
-            "lastAppVersionCode=$lastAppVersionCode, " +
-            "testGroup=$testGroup, " +
-            "firstAttributionAt=$firstAttributionAt, " +
-            "lastAttributionAt=$lastAttributionAt, " +
-            "lastOpenAt=$lastOpenAt, " +
-            "sdkConfig=$sdkConfig, " +
-            "redownload=$redownload, " +
-            "isIntegrityTokenSent=$isIntegrityTokenSent, " +
-            "integritySecret=$integritySecret)"
     }
 }

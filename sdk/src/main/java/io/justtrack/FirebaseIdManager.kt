@@ -1,16 +1,19 @@
 package io.justtrack
 
 import android.content.Context
-import io.justtrack.attribution.AdvertiserIdInfo
+import io.justtrack.api.AttributionApi
+import io.justtrack.api.AttributionApiImpl
 import io.justtrack.exceptions.InvalidFieldException
+import io.justtrack.executor.TaskExecutor
 import io.justtrack.log.Logger
 import io.justtrack.log.LoggerFields
 import io.justtrack.log.LoggerFieldsBuilder
+import io.justtrack.providers.AdvertiserIdProvider
 
 internal class FirebaseIdManager(
     private val context: Context,
     private val taskExecutor: TaskExecutor,
-    private val httpClient: HttpClient,
+    private val attributionApi: AttributionApi,
     private val deviceInfo: DeviceInfo,
     private val logger: Logger,
     private val networkErrorLogger: NetworkErrorLogger,
@@ -30,7 +33,7 @@ internal class FirebaseIdManager(
             return ErrorFuture(exception)
         }
 
-        return taskExecutor.executeAsFuture(
+        return taskExecutor.executeFuture(
             setFirebaseTask(
                 attributionIdManager,
                 attributionParams,
@@ -50,22 +53,22 @@ internal class FirebaseIdManager(
             context,
             attributionIdManager,
             PublishFirebaseAppInstanceIdTask.LoggerParams(logger, networkErrorLogger),
-            httpClient,
+            attributionApi,
             PublishFirebaseAppInstanceIdTask.AttributionParams(
                 attributionParams.userId,
-                attributionParams.advertiserIdInfo,
+                attributionParams.advertiserIdProvider,
                 attributionParams.firebaseAppInstanceId,
             ),
             reason,
         )
 
-        return taskExecutor.executeAsFuture(
+        return taskExecutor.executeFuture(
             FixedRetryingTask(
                 task,
                 deviceInfo,
                 logger,
                 TrackingEventErrorClassifier.instance,
-                HttpClientImpl.SEND_FIREBASE_APP_INSTANCE_ID_REQUEST_NAME,
+                AttributionApiImpl.SEND_FIREBASE_APP_INSTANCE_ID_REQUEST_NAME,
                 FixedRetryingTask.DEFAULT_RETRY_DELAYS,
             ),
         )
@@ -92,7 +95,7 @@ internal class FirebaseIdManager(
 
     internal data class AttributionParams(
         val userId: AsyncFuture<String>,
-        val advertiserIdInfo: AsyncFuture<AdvertiserIdInfo>,
+        val advertiserIdProvider: AdvertiserIdProvider,
         val firebaseAppInstanceId: String,
     )
 

@@ -4,12 +4,13 @@ import android.content.Context
 import io.justtrack.events.JtAppInstallEvent
 import io.justtrack.events.JtAppOpenEvent
 import io.justtrack.events.TimeUnitGroup
+import io.justtrack.executor.TaskExecutor
 import io.justtrack.log.Logger
 import io.justtrack.log.LoggerFieldsBuilder
 import java.util.Date
 
 internal class NotifyAppStartHandler internal constructor(
-    val sdk: BaseJustTrackSdk,
+    val sdk: JustTrackSdkImpl,
     val taskExecutor: TaskExecutor,
     val context: Context,
     private val sessionManager: SessionManager,
@@ -25,7 +26,7 @@ internal class NotifyAppStartHandler internal constructor(
         val happenedAt = startEvent.getStartedAt()
         sdk.publishEvent(JtAppOpenEvent(sessionId, duration, TimeUnitGroup.MILLISECONDS, happenedAt))
 
-        taskExecutor.executeAsFuture(
+        taskExecutor.executeFuture(
             NotifyAppStartTask(
                 sdk,
                 applicationVersionUpdateInfoFuture,
@@ -38,7 +39,7 @@ internal class NotifyAppStartHandler internal constructor(
     }
 
     internal class NotifyAppStartTask(
-        val sdk: BaseJustTrackSdk,
+        val sdk: JustTrackSdkImpl,
         val applicationVersionUpdateInfoFuture: AsyncFuture<AppVersionUpdateInfo?>,
         val sessionId: String,
         val duration: Double,

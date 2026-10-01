@@ -48,7 +48,7 @@ interface JustTrackSdk {
      *
      * @return A future which resolves as soon as the backend was notified about the experiment variant.
      */
-    fun setExperimentVariant(experiment: String?, variant: String?, happenedAt: Date?): AsyncFuture<Void>
+    fun setExperimentVariant(experiment: String, variant: String, happenedAt: Date?): AsyncFuture<Void>
 
     /**
      * Use this method to share the information about the test group assigned to the user.
@@ -67,21 +67,7 @@ interface JustTrackSdk {
      *
      * @return A future which resolves as soon as the backend was notified about the experiment variant.
      */
-    fun setExperimentVariant(experiment: String?, variant: String?, tags: List<String?>?, happenedAt: Date?): AsyncFuture<Void>
-
-    /**
-     * Retrieve the test group of the user. The test group is retrieved from the justtrack backend
-     * and resolves to null should the request fail. It doesn't change once some value (even null)
-     * has been returned for it.
-     *
-     *
-     * In some cases, the backend can't compute a test group id. In that case, the returned value
-     * is also null.
-     *
-     * @return The test group of the user or null.
-     */
-    @Deprecated("Will be removed in future releases")
-    fun getTestGroupId(): AsyncFuture<Int>
+    fun setExperimentVariant(experiment: String, variant: String, tags: List<String?>, happenedAt: Date?): AsyncFuture<Void>
 
     /**
      * Send attribution information about the current user of your app to the backend and provide
@@ -252,7 +238,7 @@ interface JustTrackSdk {
         message = "Deprecated in favor of .track()",
         replaceWith = ReplaceWith("track(event)"),
     )
-    fun publishEvent(event: AppEvent): AsyncFuture<Void>
+    fun publishEvent(event: AppEvent): AsyncFuture<Void?>
 
     /**
      * Track an event the user caused to the backend. Events are send in batches to the backend and
@@ -263,7 +249,7 @@ interface JustTrackSdk {
      * or throws an exception if the event could not be published. If you don't care whether the event
      * has already reached the backend you can just ignore the returned future.
      */
-    fun track(event: AppEvent): AsyncFuture<Void>
+    fun track(event: AppEvent): AsyncFuture<Void?>
 
     /**
      * Track an event the user caused to the backend. Events are send in batches to the backend and
@@ -274,7 +260,7 @@ interface JustTrackSdk {
      * or throws an exception if the event could not be published. If you don't care whether the event
      * has already reached the backend you can just ignore the returned future.
      */
-    fun track(eventName: String): AsyncFuture<Void>
+    fun track(eventName: String): AsyncFuture<Void?>
 
     /**
      * Track an event the user caused to the backend. Events are sent in batches to the backend and
@@ -286,7 +272,7 @@ interface JustTrackSdk {
      * or throws an exception if the event could not be published. If you don't care whether the event
      * has already reached the backend, you can just ignore the returned future.
      */
-    fun track(eventName: String, dimensions: Map<String, String>): AsyncFuture<Void>
+    fun track(eventName: String, dimensions: Map<String, String>): AsyncFuture<Void?>
 
     /**
      * Forward an ad impression to the justtrack backend. Depending on the ad SDK we will use this
@@ -297,7 +283,7 @@ interface JustTrackSdk {
      * @return A future which resolves to an implementation defined value
      * if the ad impression was forwarded to the justtrack backend.
      */
-    fun forwardAdImpression(adImpression: AdImpression): AsyncFuture<Void>
+    fun forwardAdImpression(adImpression: AdImpression): AsyncFuture<Void?>
 
     /**
      * Install the uncaught exception handler of the justtrack SDK as the default
@@ -340,6 +326,36 @@ interface JustTrackSdk {
      * @param adapter The IntegrationAdapter to add.
      */
     fun integrateWith(adapter: IntegrationAdapter)
+
+    /**
+     * Sets the value for global dimension 0 (`jt_global_0`).
+     *
+     * Global dimensions are automatically attached to all future events sent by the SDK.
+     * They persist across sessions and app launches until explicitly cleared or the app is re-installed.
+     *
+     * @param value The dimension value. Pass `null` to clear the dimension.
+     */
+    fun setGlobalDimension0(value: String?)
+
+    /**
+     * Sets the value for global dimension 1 (`jt_global_1`).
+     *
+     * Global dimensions are automatically attached to all future events sent by the SDK.
+     * They persist across sessions and app launches until explicitly cleared or the app is re-installed.
+     *
+     * @param value The dimension value. Pass `null` to clear the dimension.
+     */
+    fun setGlobalDimension1(value: String?)
+
+    /**
+     * Sets the value for global dimension 2 (`jt_global_2`).
+     *
+     * Global dimensions are automatically attached to all future events sent by the SDK.
+     * They persist across sessions and app launches until explicitly cleared or the app is re-installed.
+     *
+     * @param value The dimension value. Pass `null` to clear the dimension.
+     */
+    fun setGlobalDimension2(value: String?)
 
     /**
      * Forward an IAP of a product to the justtrack backend. The backend will validate the purchase

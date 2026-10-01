@@ -85,7 +85,7 @@ public class IronSourceActivity extends BaseActivity<ActivityIronSourceBinding> 
                 );
                 IntegrationHelper.validateIntegration(this);
 
-                MainApplication.sdk.integrateWith(new IronSourceIntegrationAdapter(customUserId));
+                MainApplication.sdk.integrateWith(new IronSourceIntegrationAdapter());
 
                 IronSource.setLevelPlayInterstitialListener(new LevelPlayInterstitialListener() {
 

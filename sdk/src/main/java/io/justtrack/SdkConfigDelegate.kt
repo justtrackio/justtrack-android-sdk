@@ -1,6 +1,6 @@
 package io.justtrack
 
-import io.justtrack.attribution.AdvertiserIdInfo
+import io.justtrack.providers.AdvertiserIdProvider
 
 internal class SdkConfigDelegate internal constructor(
     private val firebaseIdManager: FirebaseIdManager,
@@ -8,16 +8,12 @@ internal class SdkConfigDelegate internal constructor(
 ) {
 
     @JvmName("applyingConfig")
-    internal fun applyingConfig(
-        config: JustTrackSdkConfig,
-        userIdFuture: AsyncFuture<String>,
-        advertiserIdInfoFuture: AsyncFuture<AdvertiserIdInfo>,
-    ) {
+    internal fun applyingConfig(config: JustTrackSdkConfig, userIdFuture: AsyncFuture<String>, advertiserIdProvider: AdvertiserIdProvider) {
         if (config.firebaseAppInstanceId != null) {
             setFirebaseAppInstanceId(
                 config.firebaseAppInstanceId,
                 userIdFuture,
-                advertiserIdInfoFuture,
+                advertiserIdProvider,
             )
         }
     }
@@ -26,13 +22,13 @@ internal class SdkConfigDelegate internal constructor(
     internal fun setFirebaseAppInstanceId(
         firebaseAppInstanceId: String,
         userIdFuture: AsyncFuture<String>,
-        advertiserIdInfoFuture: AsyncFuture<AdvertiserIdInfo>,
+        advertiserIdProvider: AdvertiserIdProvider,
     ): AsyncFuture<Boolean> {
         return firebaseIdManager.setFirebaseId(
             attributionIdManager,
             FirebaseIdManager.AttributionParams(
                 userIdFuture,
-                advertiserIdInfoFuture,
+                advertiserIdProvider,
                 firebaseAppInstanceId,
             ),
         )

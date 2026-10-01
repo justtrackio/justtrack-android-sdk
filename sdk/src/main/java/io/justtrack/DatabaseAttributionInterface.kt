@@ -1,7 +1,5 @@
 package io.justtrack
 
-import android.content.Context
-
 internal interface DatabaseAttributionInterface : AutoCloseable {
     suspend fun setIntegrityTokenSent(isSent: Boolean): Boolean
 
@@ -11,19 +9,13 @@ internal interface DatabaseAttributionInterface : AutoCloseable {
 
     suspend fun getIntegritySecret(): String?
 
-    suspend fun setTestGroupId(testGroupId: Int?): Boolean
-
-    suspend fun getTestGroupId(): TestGroupIdReaderTask.TestGroupId?
-
     suspend fun setLastOpen(currentMs: Long): Boolean
 
-    suspend fun setAttributionFinished(context: Context, response: AttributionResponse, testGroup: Int?, sdkConfig: String?): Boolean
+    suspend fun setAttributionFinished(response: AttributionResponse): Boolean
 
     suspend fun getAttributionTimestamps(): AttributionTimestamps?
 
-    suspend fun getStoredOutput(context: Context): AttributionOutput?
-
-    suspend fun getSdkConfig(): String?
+    suspend fun getStoredOutput(): AttributionOutput?
 
     suspend fun getAppVersionUpdateInfo(currentApplicationVersion: ApplicationVersion): AppVersionUpdateInfo?
 

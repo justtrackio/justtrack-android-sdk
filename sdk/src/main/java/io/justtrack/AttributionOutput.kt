@@ -7,8 +7,6 @@ import io.justtrack.retargeting.RetargetingParameters
 internal data class AttributionOutput(
     private val attributionResponse: AttributionResponse,
     private val retargetingParameters: RetargetingParameters?,
-    private val testGroup: Int?,
-    private val sdkConfig: DTOAttributionOutputSdkConfig?,
     private val claimsTimedOut: Boolean,
 ) : PreliminaryRetargetingParameters.ValidateResult {
     @JvmName("getAttributionResponse")
@@ -27,11 +25,6 @@ internal data class AttributionOutput(
         return retargetingParameters
     }
 
-    @JvmName("getTestGroup")
-    internal fun getTestGroup(): Int? {
-        return testGroup
-    }
-
     @JvmName("didClaimsTimeOut")
     internal fun didClaimsTimeOut(): Boolean {
         return claimsTimedOut
@@ -39,10 +32,5 @@ internal data class AttributionOutput(
 
     override fun validParameters(): RetargetingParameters? {
         return retargetingParameters
-    }
-
-    @JvmName("getSdkConfig")
-    internal fun getSdkConfig(): DTOAttributionOutputSdkConfig? {
-        return sdkConfig
     }
 }

@@ -1,23 +1,24 @@
 package io.justtrack
 
 import io.justtrack.PublishEventsQueue.Companion.build
+import io.justtrack.api.EventApi
 import io.justtrack.attribution.AdvertiserIdInfo
 import io.justtrack.versions.VersionBundle
 import java.util.UUID
 
-internal class PublishEventsTask<T : List<PublishingEvent>>(
+internal class PublishEventsTask<T : List<StorableEvent>>(
     private val deviceInfo: DeviceInfo,
-    private val logger: HttpLogger,
     private val events: T,
     private val attributionParams: AttributionParams,
     private val versionBundle: VersionBundle,
-    private val httpClient: HttpClient,
+    private val eventApi: EventApi,
 ) : Task<T> {
     override suspend fun execute(): T {
         val advertiserIdValue = attributionParams.advertiserId.await().advertiserId
-        val userId = attributionParams.userIdFuture.await()
-        val installInstanceId = attributionParams.installInstanceIdFunction.invoke().await()
+        val attributionResponse = attributionParams.attributionOutput.await().getAttributionResponse()
+        val installInstanceId = attributionParams.installInstanceId.await()
 
+        val userId = attributionResponse.getUserId()
         val event = build(
             events,
             deviceInfo,
@@ -32,8 +33,7 @@ internal class PublishEventsTask<T : List<PublishingEvent>>(
             versionBundle.applicationVersion,
         )
 
-        val result = httpClient.sendUserEvents(
-            logger,
+        val result = eventApi.sendUserEvents(
             event,
             advertiserIdValue,
             userId.toString(),
@@ -50,9 +50,9 @@ internal class PublishEventsTask<T : List<PublishingEvent>>(
 
     internal data class AttributionParams(
         val advertiserId: AsyncFuture<AdvertiserIdInfo>,
-        val userIdFuture: AsyncFuture<UUID>,
+        val attributionOutput: AsyncFuture<AttributionOutput>,
         val trackingId: String?,
         val trackingProvider: String,
-        val installInstanceIdFunction: () -> AsyncFuture<String>,
+        val installInstanceId: AsyncFuture<String>,
     )
 }

@@ -2,11 +2,11 @@ package io.justtrack.config
 
 import io.justtrack.AsyncFuture
 import io.justtrack.FixedRetryingTask
-import io.justtrack.HttpClient
 import io.justtrack.Task
-import io.justtrack.TaskExecutor
+import io.justtrack.executor.TaskExecutor
 import io.justtrack.TrackingEventErrorClassifier
 import io.justtrack.ValueFuture
+import io.justtrack.api.ConfigApi
 import io.justtrack.log.Logger
 import org.json.JSONArray
 import org.json.JSONObject
@@ -14,7 +14,7 @@ import org.json.JSONObject
 internal class RemoteConfigProvider internal constructor(
     private val remoteConfigStore: RemoteConfigStore,
     private val taskExecutor: TaskExecutor,
-    private val httpClient: HttpClient,
+    private val configApi: ConfigApi,
     private val attributionParams: RemoteConfigImpl.AttributionParams,
     private val remoteConfigTimeStamp: RemoteConfigTimestamp,
     private val logger: Logger,
@@ -45,16 +45,17 @@ internal class RemoteConfigProvider internal constructor(
             inFlight != null && !inFlight.isDone -> inFlight
             isWithinInterval && storedConfig != null -> ValueFuture<Void?>(null)
             else -> {
-                val currentFuture = taskExecutor.executeAsFuture(
-                    FixedRetryingTask(
-                        fetchRemoteConfig(),
-                        attributionParams.deviceInfo,
-                        logger,
-                        TrackingEventErrorClassifier.instance,
-                        null,
-                        retryConfig,
-                    ),
-                )
+                val currentFuture =
+                    taskExecutor.executeFuture(
+                        FixedRetryingTask(
+                            fetchRemoteConfig(),
+                            attributionParams.deviceInfo,
+                            logger,
+                            TrackingEventErrorClassifier.instance,
+                            null,
+                            retryConfig,
+                        ),
+                    )
                 cacheFuture = currentFuture
                 currentFuture
             }
@@ -66,8 +67,8 @@ internal class RemoteConfigProvider internal constructor(
     private fun fetchRemoteConfig(): Task<Void?> {
         return Task {
             val installInstanceIdValue = attributionParams.installInstanceIdProvider().await()
-            val advertiseIdValue = attributionParams.deviceIdProvider().await().advertiserId
-            val userIdValue = attributionParams.userIdProvider().await()
+            val advertiseIdValue = attributionParams.advertiserIdProvider.provideAdvertiserId().await().advertiserId
+            val userIdValue = attributionParams.userIdProvider.provideUserIdFuture().await()
             val deviceInfo = attributionParams.deviceInfo
             val sdkVersion = attributionParams.sdkVersion
 
@@ -91,8 +92,7 @@ internal class RemoteConfigProvider internal constructor(
                 installTimestamp = remoteConfigTimeStamp.getInstalledAtTimestamp(),
             )
 
-            val result = httpClient.fetchRemoteConfig(
-                logger,
+            val result = configApi.fetchRemoteConfig(
                 queryParams,
                 advertiseIdValue,
                 userIdValue,
@@ -133,24 +133,13 @@ internal class RemoteConfigProvider internal constructor(
 
     internal fun storeConfig(configJson: JSONObject) {
         val assignments = Assignment.parseAssignments(configJson)
-        val storedAssignments = remoteConfigStore.getStoredAssignments().orEmpty()
-        val mergedAssignments = storedAssignments.toMutableMap()
+        val assignmentsJson = JSONObject()
+        val assignmentsArray = JSONArray()
         for (assignment in assignments) {
-            val existing = mergedAssignments[assignment.configKey]
-            val mergedAssignment = if (existing != null) {
-                assignment.copy(isPending = existing.isPending)
-            } else {
-                assignment.copy(isPending = false)
-            }
-            mergedAssignments[assignment.configKey] = mergedAssignment
+            assignmentsArray.put(assignment.toJson())
         }
-        val mergedJson = JSONObject()
-        val mergedArray = JSONArray()
-        for (assignment in mergedAssignments.values) {
-            mergedArray.put(assignment.toJson())
-        }
-        mergedJson.put("assignments", mergedArray)
-        val rawConfig = mergedJson.toString()
+        assignmentsJson.put("assignments", assignmentsArray)
+        val rawConfig = assignmentsJson.toString()
         remoteConfigStore.setStoredAssignments(rawConfig)
     }
 

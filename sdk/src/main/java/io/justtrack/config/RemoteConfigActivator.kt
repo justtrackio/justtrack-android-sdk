@@ -1,11 +1,12 @@
 package io.justtrack.config
 
+import androidx.annotation.VisibleForTesting
 import io.justtrack.AsyncFuture
 import io.justtrack.FixedRetryingTask
-import io.justtrack.HttpClient
 import io.justtrack.Task
-import io.justtrack.TaskExecutor
+import io.justtrack.executor.TaskExecutor
 import io.justtrack.TrackingEventErrorClassifier
+import io.justtrack.api.ConfigApi
 import io.justtrack.dtos.DTOActivateExperiments
 import io.justtrack.log.Logger
 import org.json.JSONArray
@@ -14,14 +15,14 @@ import org.json.JSONObject
 internal class RemoteConfigActivator internal constructor(
     private val remoteConfigStore: RemoteConfigStore,
     private val taskExecutor: TaskExecutor,
-    private val httpClient: HttpClient,
+    private val configApi: ConfigApi,
     private val attributionParams: RemoteConfigImpl.AttributionParams,
     private val logger: Logger,
     private val retryTimeouts: List<Int>,
 ) {
 
     internal fun activate(experiments: List<String>): AsyncFuture<Void?> {
-        return taskExecutor.executeAsFuture(
+        return taskExecutor.executeFuture(
             FixedRetryingTask(
                 activateRemoteConfig(experiments),
                 attributionParams.deviceInfo,
@@ -33,22 +34,42 @@ internal class RemoteConfigActivator internal constructor(
         )
     }
 
+    /**
+     * Filter out non-pending experiment.
+     */
+    @VisibleForTesting
+    internal fun filterRemoteConfig(experiments: List<String>): List<String> {
+        val storedAssignments = remoteConfigStore.getStoredAssignments()
+        if (storedAssignments.isNullOrEmpty()) {
+            return experiments
+        }
+
+        val nonPendingExperimentIds = HashSet<String>()
+        for (assignment in storedAssignments.values) {
+            if (!assignment.isPending) {
+                nonPendingExperimentIds.add(assignment.experimentId)
+            }
+        }
+
+        return experiments.filter { it !in nonPendingExperimentIds }
+    }
+
     private fun activateRemoteConfig(experiments: List<String>): Task<Void?> {
         return Task {
-            if (experiments.isEmpty()) return@Task null
+            val filteredExperiments = filterRemoteConfig(experiments)
+            if (filteredExperiments.isEmpty()) return@Task null
 
             val installInstanceId = attributionParams.installInstanceIdProvider().await()
-            val body = DTOActivateExperiments(installInstanceId, experiments)
-            val result = httpClient.activateExperiments(
-                logger,
+            val body = DTOActivateExperiments(installInstanceId, filteredExperiments)
+            val result = configApi.activateExperiments(
                 body,
-                attributionParams.deviceIdProvider().await().advertiserId,
-                attributionParams.userIdProvider().await(),
+                attributionParams.advertiserIdProvider.provideAdvertiserId().await().advertiserId,
+                attributionParams.userIdProvider.provideUserIdFuture().await(),
                 installInstanceId,
             )
 
             if (result.isSuccess) {
-                updateStoredPendingStatus(experiments)
+                updateStoredPendingStatus(filteredExperiments)
             } else {
                 val exception = result.exceptionOrNull()
                 if (exception != null) {

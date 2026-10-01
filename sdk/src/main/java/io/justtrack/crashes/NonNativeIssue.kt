@@ -27,19 +27,7 @@ internal class NonNativeIssue(
     } catch (e: Exception) {
         null
     },
-    name = try {
-        dataJson.optString("name") ?: ""
-    } catch (e: Exception) {
-        ""
-    },
-    reason = try {
-        dataJson.optString("reason") ?: ""
-    } catch (e: Exception) {
-        ""
-    },
-    breadcrumbs = try {
-        breadcrumbJson.toString()
-    } catch (e: Exception) {
-        null
-    },
+    name = dataJson.optString("name", ""),
+    reason = dataJson.optString("reason", ""),
+    breadcrumbs = breadcrumbJson.toString(),
 )

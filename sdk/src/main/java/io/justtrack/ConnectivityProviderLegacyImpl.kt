@@ -14,6 +14,10 @@ internal class ConnectivityProviderLegacyImpl(
 ) : BroadcastReceiver(), ConnectivityProvider {
     private val reconnectSubscriptions = SubscriptionManager<ConnectivityProvider.ConnectivityCallback>()
 
+    @Volatile
+    override var connectionType: ConnectionType = ConnectionType.UNKNOWN
+        private set
+
     init {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.registerReceiver(
@@ -41,8 +45,7 @@ internal class ConnectivityProviderLegacyImpl(
         val connMgr =
             context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val connected = connMgr.activeNetworkInfo != null
-        reconnectSubscriptions.call {
-            it.onConnectivityChange(connected)
-        }
+        connectionType = if (connected) ConnectionType.UNKNOWN else ConnectionType.OFFLINE
+        reconnectSubscriptions.call { listener -> listener.onConnectivityChange(connected) }
     }
 }

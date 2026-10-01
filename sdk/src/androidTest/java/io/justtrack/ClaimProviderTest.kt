@@ -4,7 +4,7 @@ import android.app.Application
 import android.content.Context
 import androidx.test.platform.app.InstrumentationRegistry
 import io.justtrack.Store.clearForTesting
-import io.justtrack.log.Logger
+import io.justtrack.api.DefaultAttributionApi
 import io.justtrack.publicInterface.SdkTest
 import org.json.JSONArray
 import org.json.JSONException
@@ -71,7 +71,7 @@ class ClaimProviderTest {
         FirebaseIdStore.getInstance().clearForTesting(context)
         JustTrack.resetForTesting()
 
-        val httpClient = ClaimProvidingHttpClient(signResult)
+        val attributionApi = ClaimProvidingAttributionApi(signResult)
         val executor = ThreadPoolExecutor(
             10,
             10,
@@ -85,24 +85,24 @@ class ClaimProviderTest {
             (context.applicationContext as Application)!!,
             SdkTest.API_TOKEN,
         )
-        val sdk = JustTrackSdkImpl.createForTesting(
+        val sdk = createForTesting(
             builder,
-            httpClient,
             RetryConfig(5, 0, 5, RetryConfig.TEST_INTEGRITY_CONFIG),
             null,
             null,
+            attributionApi,
         )
 
         try {
             sdk.attribution.get()
 
-            httpClient.assertNoErrors()
+            attributionApi.assertNoErrors()
         } finally {
             sdk.shutdown()
         }
     }
 
-    private class ClaimProvidingHttpClient(signResults: List<TokenAnswer>) : BaseTestHttpClient() {
+    private class ClaimProvidingAttributionApi(signResults: List<TokenAnswer>) : DefaultAttributionApi() {
         private val errorList: MutableList<AssertionError> = ArrayList()
         private val signResults: Queue<TokenAnswer> = ArrayDeque()
         private val expectedClaims = JSONArray()
@@ -116,7 +116,7 @@ class ClaimProviderTest {
             }
         }
 
-        override suspend fun sendAttributionRequest(logger: Logger, body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
+        override suspend fun sendAttributionRequest(body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
             try {
                 val claims = body.toJSON(Formatter).getJSONArray("claims")
                 try {
@@ -142,7 +142,7 @@ class ClaimProviderTest {
             }
         }
 
-        override suspend fun getSignedIpClaim(logger: Logger, protocol: IPProtocol, advertiserId: String?): Result<JSONObject> {
+        override suspend fun getSignedIpClaim(protocol: IPProtocol, advertiserId: String?): Result<JSONObject> {
             try {
                 val next: TokenAnswer
                 // Deadlock-Safety: This is a test.

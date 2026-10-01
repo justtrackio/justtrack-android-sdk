@@ -16,7 +16,6 @@ import io.justtrack.AttributionTimestamps
 import io.justtrack.BuildConfig
 import io.justtrack.LogMessageEntity
 import io.justtrack.LogMetricEntity
-import io.justtrack.TestGroupIdReaderTask
 import io.justtrack.UserEventEntity
 import io.justtrack.log.Logger
 
@@ -24,7 +23,7 @@ internal open class Database @VisibleForTesting internal constructor(
     context: Context,
     consoleLogger: Logger,
     injectedAttributionDAO: AttributionDAO? = null,
-    version: Int = 6,
+    version: Int = 8,
     private val isDebugModeEnabled: Boolean = BuildConfig.DEBUG,
 ) : SQLiteOpenHelper(context, DATABASE_NAME, null, version, CustomDatabaseErrorHandler(consoleLogger)) {
 
@@ -36,11 +35,11 @@ internal open class Database @VisibleForTesting internal constructor(
     ) : this(context, consoleLogger, null)
 
     @VisibleForTesting
-    internal val attributionDAO: AttributionDAO = injectedAttributionDAO ?: AttributionDAOImpl(logger)
+    internal val attributionDAO: AttributionDAO = injectedAttributionDAO ?: AttributionDAOImpl(context, logger)
 
     init {
         // This method will suspend until onCreate or onUpgrade is completed first.
-        attributionDAO.migrateFromStore(context, this.writableDatabase)
+        attributionDAO.migrateFromStore(this.writableDatabase)
     }
 
     override fun onCreate(db: SQLiteDatabase?) {
@@ -63,10 +62,21 @@ internal open class Database @VisibleForTesting internal constructor(
                 attributionDAO.createTable(it)
             }
             return
-        } else if (oldVersion == 4 && newVersion == 5) {
-            // remove recruiter column from attribution table
+        } else if (oldVersion in 4..6) {
             db?.let {
-                attributionDAO.dropFieldOperation(it)
+                if (newVersion >= 8) {
+                    attributionDAO.migrateAttributionToV8(it)
+                } else {
+                    // remove recruiter column from attribution table (4 -> 5)
+                    // remove testGroupId, sdkConfig from attribution table (6 -> 7)
+                    attributionDAO.dropFieldOperation(it)
+                }
+            }
+        } else if (oldVersion == 7) {
+            // Invalidate cached v4 attribution. Legacy campaign_id is a numeric ID and must never
+            // become v4 campaign.externalId. Preserve identity and independent persisted state.
+            db?.let {
+                attributionDAO.migrateAttributionToV8(it)
             }
         }
 
@@ -582,32 +592,20 @@ internal open class Database @VisibleForTesting internal constructor(
         return null
     }
 
-    internal fun setAttributionFinished(context: Context, response: AttributionResponse, testGroup: Int?, sdkConfig: String?) {
-        attributionDAO.setAttributionFinished(this.writableDatabase, context, response, testGroup, sdkConfig)
+    internal fun setAttributionFinished(response: AttributionResponse) {
+        attributionDAO.setAttributionFinished(this.writableDatabase, response)
     }
 
-    internal fun getStoredOutput(context: Context): AttributionOutput? {
-        return attributionDAO.getStoredOutput(context, this.readableDatabase)
+    internal fun getStoredOutput(): AttributionOutput? {
+        return attributionDAO.getStoredOutput(this.readableDatabase)
     }
 
     internal fun getAttributionTimestamps(): AttributionTimestamps? {
         return attributionDAO.getAttributionTimestamps(this.readableDatabase)
     }
 
-    internal fun getTestGroupId(): TestGroupIdReaderTask.TestGroupId? {
-        return attributionDAO.getTestGroupId(this.readableDatabase)
-    }
-
-    internal fun setTestGroupId(testGroupId: Int?) {
-        attributionDAO.setTestGroupId(this.writableDatabase, testGroupId)
-    }
-
     internal fun setLastOpen(currentMs: Long) {
         attributionDAO.setLastOpen(this.writableDatabase, currentMs)
-    }
-
-    internal fun getSdkConfig(): String? {
-        return attributionDAO.getSdkConfig(this.readableDatabase)
     }
 
     internal fun getAppVersionUpdateInfo(currentVersion: ApplicationVersion): AppVersionUpdateInfo {

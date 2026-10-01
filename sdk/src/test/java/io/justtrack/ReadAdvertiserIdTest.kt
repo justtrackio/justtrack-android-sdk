@@ -1,7 +1,8 @@
 package io.justtrack
 
+import io.justtrack.ads.AdvertiserIdProcessingTask
+import io.justtrack.ads.DeviceAdvertiserIdReader
 import io.justtrack.attribution.AdvertiserIdInfo
-import io.justtrack.providers.AdvertiserIdProvider
 import kotlinx.coroutines.runBlocking
 import org.json.JSONException
 import org.junit.Assert
@@ -24,8 +25,8 @@ class ReadAdvertiserIdTest {
     @Throws(Exception::class)
     fun testAdvertiserId() = runBlocking {
         val logger: HttpLogger = mock<HttpLogger>()
-        val advertiserIdProvider = object : AdvertiserIdProvider {
-            override fun provideAdvertiserId(): AdvertiserIdInfo {
+        val deviceAdvertiserIdReader = object : DeviceAdvertiserIdReader {
+            override fun readAdvertiserId(): AdvertiserIdInfo {
                 return object : AdvertiserIdInfo {
                     override val advertiserId: String?
                         get() = idInfo
@@ -35,8 +36,8 @@ class ReadAdvertiserIdTest {
             }
         }
 
-        val task = AdvertiserIdReaderTask(
-            advertiserIdProvider,
+        val task = AdvertiserIdProcessingTask(
+            deviceAdvertiserIdReader,
             logger = logger,
         )
 

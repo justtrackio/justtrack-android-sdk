@@ -9,9 +9,11 @@ import com.google.android.gms.appset.AppSetIdInfo;
 
 import java.util.concurrent.Future;
 
+import io.justtrack.executor.TaskExecutor;
+
 /**
  * Class to encapsulate getting an {@link AppSetIdInfo} {@link Future}. Allows us to easily lock
- * this class without having to fear that we deadlock anything (we used to lock the {@link BaseJustTrackSdk}
+ * this class without having to fear that we deadlock anything (we used to lock the {@link JustTrackSdkImpl}
  * for this - this lead to a problem when you needed to lock the SDK to process events, but another
  * thread had the SDK locked while blocking on publishing a new event as the blocking queue was full).
  */
@@ -27,7 +29,9 @@ class AppSetIdProvider {
             @NonNull HttpLogger logger
     ) {
         if (appSetIdInfoFuture == null) {
-            appSetIdInfoFuture = taskExecutor.executeAsFuture(new AppSetIdReaderTask(context, logger));
+            appSetIdInfoFuture = taskExecutor.executeFuture(
+                    new AppSetIdReaderTask(context, logger)
+            );
         }
 
         return appSetIdInfoFuture;

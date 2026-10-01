@@ -19,6 +19,8 @@ class CrashHandlerTest {
     private var originalHandler: UncaughtExceptionHandler? = null
     private val mockDefaultHandler: UncaughtExceptionHandler = mock()
     private lateinit var crashHandler: CrashHandler
+    private lateinit var logger: TestLoggerImpl
+    private val nativeLoader = CrashReportNativeLoaderImpl("io.justtrack.test")
 
     @Before
     fun setUp() {
@@ -26,12 +28,17 @@ class CrashHandlerTest {
 
         Thread.setDefaultUncaughtExceptionHandler(mockDefaultHandler)
 
-        crashHandler = CrashHandler("io.justtrack.test", crashReporter, TestLoggerImpl(), isTracking)
+        logger = TestLoggerImpl()
+        crashHandler = CrashHandler(
+            crashReporter,
+            logger,
+            isTracking,
+            nativeLoader,
+        )
     }
 
     @After
     fun tearDown() {
-        // Restore the original handler to avoid side effects
         Thread.setDefaultUncaughtExceptionHandler(originalHandler)
     }
 
@@ -56,13 +63,34 @@ class CrashHandlerTest {
 
         handler.uncaughtException(Thread.currentThread(), testException)
 
-        // Our crash reporting doesn't get exceptions
         verify(crashReporter, never()).captureException(any())
-        // Default exception handler still captures exception so that apps can handle them
         verify(mockDefaultHandler).uncaughtException(Thread.currentThread(), testException)
     }
 
-    // installs
+    @Test
+    fun capturingException_reports_internal_crash() {
+        // Exception with io.justtrack in stack trace -> internal crash -> should report
+        val exception = RuntimeException("internal crash")
+        // The stack trace will contain io.justtrack since we're in this package
+        crashHandler.capturingException(exception)
+
+        verify(crashReporter).captureException(exception)
+    }
+
+    @Test
+    fun capturingException_drops_external_crash_and_logs() {
+        // Create an exception whose stack trace does NOT contain io.justtrack
+        val exception = RuntimeException("external crash")
+        // Override the stack trace to not contain io.justtrack
+        exception.stackTrace = arrayOf(
+            StackTraceElement("com.external.SomeClass", "someMethod", "SomeClass.java", 42),
+        )
+
+        crashHandler.capturingException(exception)
+
+        verify(crashReporter, never()).captureException(any())
+    }
+
     private fun installUncaughtExceptionHandler(): UncaughtExceptionHandler {
         crashHandler.installUncaughtExceptionHandler()
 

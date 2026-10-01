@@ -10,12 +10,16 @@ import com.android.billingclient.api.BillingClientStateListener
 import com.android.billingclient.api.BillingFlowParams
 import com.android.billingclient.api.BillingResult
 import com.android.billingclient.api.ConsumeParams
+import com.android.billingclient.api.PendingPurchasesParams
 import com.android.billingclient.api.ProductDetails
 import com.android.billingclient.api.PurchasesUpdatedListener
 import com.android.billingclient.api.QueryProductDetailsParams
 import com.android.billingclient.api.QueryPurchasesParams
 import io.justtrack.events.Money
 import io.justtrack.testapp.MainApplication
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class IAPPresenterImpl : IAPPresenter {
     private val tag = "MainPresenter"
@@ -88,7 +92,7 @@ class IAPPresenterImpl : IAPPresenter {
         billingClient =
             BillingClient.newBuilder(context)
                 .setListener(purchasesUpdatedListener)
-                .enablePendingPurchases()
+                .enablePendingPurchases(PendingPurchasesParams.newBuilder().enableOneTimeProducts().build())
                 .build()
 
         billingClient.startConnection(
@@ -166,8 +170,8 @@ class IAPPresenterImpl : IAPPresenter {
                 )
                 .build()
         billingClient.queryProductDetailsAsync(queryProductDetailsParams) { _, productDetailsList ->
-            Log.e(tag, "queryProduct: Query Product: Completed ${productDetailsList.size}")
-            for (productDetail in productDetailsList) {
+            Log.e(tag, "queryProduct: Query Product: Completed ${productDetailsList.productDetailsList.size}")
+            for (productDetail in productDetailsList.productDetailsList) {
                 if (productDetail.productType == BillingClient.ProductType.INAPP) {
                     consumableList.add(productDetail)
                 } else {
@@ -190,8 +194,8 @@ class IAPPresenterImpl : IAPPresenter {
                 )
                 .build()
         billingClient.queryProductDetailsAsync(queryProductDetailsParams) { _, productDetailsList ->
-            Log.e(tag, "queryProduct: Query Product: Completed" + productDetailsList.size)
-            for (productDetail in productDetailsList) {
+            Log.e(tag, "queryProduct: Query Product: Completed" + productDetailsList.productDetailsList.size)
+            for (productDetail in productDetailsList.productDetailsList) {
                 if (productDetail.productType == BillingClient.ProductType.INAPP) {
                     consumableList.add(productDetail)
                 } else {
@@ -201,25 +205,27 @@ class IAPPresenterImpl : IAPPresenter {
         }
     }
 
-    private fun purchase(item: ProductDetails) {
-        val productDetailsParamsList =
-            listOf(
-                BillingFlowParams.ProductDetailsParams.newBuilder().apply {
-                    setProductDetails(item)
+    private fun purchase(item: ProductDetails) =
+        CoroutineScope(Dispatchers.IO).launch {
+            val productDetailsParamsList =
+                listOf(
+                    BillingFlowParams.ProductDetailsParams.newBuilder().apply {
+                        setProductDetails(item)
 
-                    if (item.productType == BillingClient.ProductType.SUBS) {
-                        setOfferToken(item.subscriptionOfferDetails!![0].offerToken)
-                    }
-                }.build(),
-            )
+                        if (item.productType == BillingClient.ProductType.SUBS) {
+                            setOfferToken(item.subscriptionOfferDetails!![0].offerToken)
+                        }
+                    }.build(),
+                )
+            val accountId = MainApplication.sdk!!.installInstanceId.await()
+            val billingFlowParams =
+                BillingFlowParams.newBuilder()
+                    .setProductDetailsParamsList(productDetailsParamsList)
+                    .setObfuscatedAccountId(accountId)
+                    .build()
 
-        val billingFlowParams =
-            BillingFlowParams.newBuilder()
-                .setProductDetailsParamsList(productDetailsParamsList)
-                .build()
-
-        billingClient.launchBillingFlow(context, billingFlowParams)
-    }
+            billingClient.launchBillingFlow(context, billingFlowParams)
+        }
 
     override fun consumeAllProduct() {
         val param =

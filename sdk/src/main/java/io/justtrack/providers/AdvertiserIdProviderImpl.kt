@@ -1,19 +1,35 @@
 package io.justtrack.providers
 
 import android.content.Context
-import com.google.android.gms.ads.identifier.AdvertisingIdClient
+import io.justtrack.AsyncFuture
+import io.justtrack.HttpLogger
+import io.justtrack.ads.AdvertiserIdProcessingTask
+import io.justtrack.ads.DeviceAdvertiserIdReaderImpl
 import io.justtrack.attribution.AdvertiserIdInfo
+import io.justtrack.executor.TaskExecutor
 
-internal class AdvertiserIdProviderImpl internal constructor(val context: Context) : AdvertiserIdProvider {
-    override fun provideAdvertiserId(): AdvertiserIdInfo {
-        val advertiserIdInfo = AdvertisingIdClient.getAdvertisingIdInfo(context)
-        val info = object : AdvertiserIdInfo {
-            override val advertiserId: String?
-                get() = advertiserIdInfo.id
-            override val isLimitedAdTracking: Boolean
-                get() = advertiserIdInfo.isLimitAdTrackingEnabled
+/**
+ * Read advertiser Id from device.
+ */
+internal class AdvertiserIdProviderImpl(
+    private val context: Context,
+    private val taskExecutor: TaskExecutor,
+    private val logger: HttpLogger,
+) : AdvertiserIdProvider {
+    private var advertiserIdInfo: AsyncFuture<AdvertiserIdInfo>? = null
+
+    // Deadlock-Safety: executeAsFuture is not locking anything (besides the executor maybe).
+    @Synchronized
+    override fun provideAdvertiserId(): AsyncFuture<AdvertiserIdInfo> {
+        var localAdvertiserIdInfo = advertiserIdInfo
+        if (localAdvertiserIdInfo == null) {
+            localAdvertiserIdInfo = taskExecutor.executeFuture(
+                AdvertiserIdProcessingTask(DeviceAdvertiserIdReaderImpl(context), logger),
+            )
+            advertiserIdInfo = localAdvertiserIdInfo
+            return localAdvertiserIdInfo
+        } else {
+            return localAdvertiserIdInfo
         }
-
-        return info
     }
 }

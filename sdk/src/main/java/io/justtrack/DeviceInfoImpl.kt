@@ -12,6 +12,7 @@ import android.provider.Settings
 import android.telephony.TelephonyManager
 import android.view.WindowManager
 import androidx.annotation.RequiresApi
+import androidx.annotation.VisibleForTesting
 import io.justtrack.versions.ApplicationVersionImpl
 import java.util.Locale
 
@@ -133,7 +134,8 @@ internal class DeviceInfoImpl internal constructor(private val context: Context)
         return if (TextUtils.isNullOrEmpty(language)) null else language.lowercase()
     }
 
-    private fun getLocales(context: Context): List<Locale> {
+    @VisibleForTesting
+    internal fun getLocales(context: Context): List<Locale> {
         val locales: MutableList<Locale> = ArrayList()
         val config = context.resources.configuration
 
@@ -225,8 +227,9 @@ internal class DeviceInfoImpl internal constructor(private val context: Context)
     private val activityContext: Context?
         get() = JustTrack.getCurrentActivity()
 
+    @VisibleForTesting
     @RequiresApi(api = Build.VERSION_CODES.M)
-    private fun getConnectionTypeApi23(manager: ConnectivityManager): ConnectionType {
+    internal fun getConnectionTypeApi23(manager: ConnectivityManager): ConnectionType {
         val network = manager.activeNetwork ?: return ConnectionType.UNKNOWN
 
         val capabilities = manager.getNetworkCapabilities(network) ?: return ConnectionType.UNKNOWN
@@ -254,7 +257,8 @@ internal class DeviceInfoImpl internal constructor(private val context: Context)
         return ConnectionType.UNKNOWN
     }
 
-    private fun getConnectionTypeApiAll(manager: ConnectivityManager): ConnectionType {
+    @VisibleForTesting
+    internal fun getConnectionTypeApiAll(manager: ConnectivityManager): ConnectionType {
         val info = manager.activeNetworkInfo ?: return ConnectionType.UNKNOWN
 
         if (!info.isConnected) {
@@ -280,7 +284,8 @@ internal class DeviceInfoImpl internal constructor(private val context: Context)
         }
     }
 
-    private fun getMobileConnection(networkType: Int): ConnectionType {
+    @VisibleForTesting
+    internal fun getMobileConnection(networkType: Int): ConnectionType {
         return when (networkType) {
             TelephonyManager.NETWORK_TYPE_GPRS,
             TelephonyManager.NETWORK_TYPE_EDGE,

@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.justtrack.database.Database
+import io.justtrack.dtos.DTOLogMessage
+import io.justtrack.dtos.LogLevel
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.After

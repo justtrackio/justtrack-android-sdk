@@ -12,6 +12,9 @@ internal class RetryConfig(
         @JvmStatic val TEST_INTEGRITY_CONFIG: List<Int> = listOf(1, 1, 1)
 
         @JvmStatic @JvmSynthetic
+        val NO_RETRIES_CONFIG = RetryConfig(0, 0, 0, listOf(0))
+
+        @JvmStatic @JvmSynthetic
         val DEFAULT_CONFIG: RetryConfig = RetryConfig(
             5,
             5,

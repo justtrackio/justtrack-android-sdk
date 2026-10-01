@@ -3,7 +3,21 @@ package io.justtrack.attribution
 /**
  * A representation of the campaign the user was attributed to.
  */
-interface Campaign : IdString {
+interface Campaign {
+    /**
+     * Get the campaign id.
+     *
+     * @return The campaign id.
+     */
+    val id: String
+
+    /**
+     * Get the name.
+     *
+     * @return The name.
+     */
+    val name: String
+
     /**
      * Get the type of the campaign. Can be "acquisition" or "retargeting".
      *

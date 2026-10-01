@@ -36,7 +36,7 @@ class DatabasePublishEventsQueueTest {
     private lateinit var db: DatabaseInterface
     private val formatter = Formatter
     private lateinit var publishEvent: PublishEventsQueue
-    private val publishedEvents = ArrayList<PublishingEvent>()
+    private val publishedEvents = ArrayList<StorableEvent>()
     private lateinit var repo: EventRepositoryImpl
 
     @Before
@@ -47,7 +47,7 @@ class DatabasePublishEventsQueueTest {
         db = DatabaseInterface(context, LoggerImpl())
         repo = spy(EventRepositoryImpl(formatter, PlatformType.ANDROID, db.openEvents(), LoggerImpl()))
         publishEvent = PublishEventsQueue(
-            { events, version ->
+            { events, _ ->
                 publishedEvents.addAll(events)
                 ValueFuture(events)
             },
@@ -57,6 +57,18 @@ class DatabasePublishEventsQueueTest {
             50L,
             AtomicBoolean(true),
             SdkVersionImpl(5, 0, 0, "5.0.0"),
+            GlobalDimensionsRepo(
+                context.getSharedPreferences(GlobalDimensionsRepo.STORE_NAME, Context.MODE_PRIVATE),
+            ),
+            connectivityProvider = object : ConnectivityProvider {
+                override val connectionType: ConnectionType = ConnectionType.UNKNOWN
+                override fun registerOnReconnected(callback: ConnectivityProvider.ConnectivityCallback): Subscription {
+                    return object : Subscription {
+                        override fun unsubscribe() {}
+                    }
+                }
+                override fun shutdown() {}
+            },
         )
     }
 
@@ -215,12 +227,12 @@ class DatabasePublishEventsQueueTest {
         Assert.assertEquals(testDataCount, publishedEvents.size)
     }
 
-    private fun populateTestData(amount: Int): List<PublishingEvent> {
-        val dataList = ArrayList<PublishingEvent>()
+    private fun populateTestData(amount: Int): List<StorableEvent> {
+        val dataList = ArrayList<StorableEvent>()
 
         for (count in 0L until amount) {
             dataList.add(
-                PublishingEvent(
+                StorableEvent(
                     eventId = UUID.randomUUID(),
                     event = PublishableAppEvent(
                         "name $count",
@@ -230,7 +242,7 @@ class DatabasePublishEventsQueueTest {
                         null,
                         "sessionId",
                         SdkVersionImpl(5, 0, 0, "5.0.0"),
-                        null,
+                        Date(),
                     ),
                     sequenceNumber = count,
                 ),
@@ -239,10 +251,10 @@ class DatabasePublishEventsQueueTest {
         return dataList
     }
 
-    private fun populateWithMultipleDifferentTypeOfEvent(date: Date): List<PublishingEvent> {
-        val dataList = ArrayList<PublishingEvent>()
+    private fun populateWithMultipleDifferentTypeOfEvent(date: Date): List<StorableEvent> {
+        val dataList = ArrayList<StorableEvent>()
         dataList.add(
-            PublishingEvent(
+            StorableEvent(
                 id = 0,
                 eventId = UUID.randomUUID(),
                 event = JtLoginEvent("success", "fb")
@@ -254,7 +266,7 @@ class DatabasePublishEventsQueueTest {
             ),
         )
         dataList.add(
-            PublishingEvent(
+            StorableEvent(
                 id = 1,
                 eventId = UUID.randomUUID(),
                 event = JtProgressionEvent("fail", "level_42", null, null)
@@ -263,7 +275,7 @@ class DatabasePublishEventsQueueTest {
             ),
         )
         dataList.add(
-            PublishingEvent(
+            StorableEvent(
                 id = 2,
                 eventId = UUID.randomUUID(),
                 event =

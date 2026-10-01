@@ -3,6 +3,7 @@ package io.justtrack.crashes
 import io.justtrack.Formatter
 import io.justtrack.log.Logger
 import io.justtrack.log.LoggerFieldsBuilder
+import org.jetbrains.annotations.VisibleForTesting
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -28,11 +29,17 @@ internal class NativeIssue(
     } catch (e: Exception) {
         null
     },
-    name = NativeSignal.fromId(
-        dataJson.optInt("signal"),
-    )?.name ?: NativeSignal.UNKNOWN_SIGNAL.name,
+    name = resolveSignalName(dataJson.optInt("signal")),
 ) {
-    private val signalInfo = SignalInfo(dataJson)
+    @VisibleForTesting
+    internal val signalInfo = SignalInfo(dataJson)
+
+    companion object {
+        private fun resolveSignalName(signalId: Int): String {
+            val signal = NativeSignal.fromId(signalId)
+            return if (signal != null) signal.name else NativeSignal.UNKNOWN_SIGNAL.name
+        }
+    }
 
     override fun toJson(): JSONObject {
         val originalJson = super.toJson()

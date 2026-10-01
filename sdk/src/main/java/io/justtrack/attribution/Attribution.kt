@@ -22,13 +22,6 @@ interface Attribution {
     val campaign: Campaign
 
     /**
-     * Get the type of the attribution.
-     *
-     * @return The type of the attribution.
-     */
-    val type: String
-
-    /**
      * Get the id, name, and incent flag of the channel the user was attributed to.
      *
      * @return The channel the user was attributed to.

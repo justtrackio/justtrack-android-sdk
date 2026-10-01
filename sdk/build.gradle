@@ -10,13 +10,13 @@ buildscript {
 }
 
 plugins {
-    id 'com.android.library'
-    id 'org.jetbrains.kotlin.android'
-    id 'maven-publish'
-    id 'jacoco'
-    id 'checkstyle'
-    id "org.jlleitschuh.gradle.ktlint"
-    id 'org.jetbrains.dokka' version '2.0.0'
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.maven.publish)
+    alias(libs.plugins.jacoco)
+    alias(libs.plugins.checkstyle)
+    alias(libs.plugins.ktlint)
+    alias(libs.plugins.dokka)
     alias(libs.plugins.detekt)
 }
 
@@ -42,10 +42,6 @@ android {
         abortOnError false
     }
 
-    jacoco {
-        version = "0.8.11"
-    }
-
     checkstyle {
         toolVersion = '7.4'
     }
@@ -65,6 +61,7 @@ android {
         // that the app's state is completely cleared between tests.
         testInstrumentationRunnerArguments clearPackageData: 'true'
         testInstrumentationRunnerArguments useTestStorageService: "true"
+
 
         buildConfigField "int", "VERSION_MAJOR", versionMajor.toString()
         buildConfigField "int", "VERSION_MINOR", versionMinor.toString()
@@ -89,6 +86,18 @@ android {
     testOptions {
         execution 'ANDROIDX_TEST_ORCHESTRATOR'
         animationsDisabled true
+
+        // Robolectric loads production classes through its sandbox classloader, which
+        // strips source location info. JaCoCo's agent skips such classes by default, so
+        // we enable `includeNoLocationClasses` to also instrument them. `jdk.internal.*`
+        // is excluded because instrumenting it crashes the JVM on JDK 11+.
+        // https://github.com/jacoco/jacoco/pull/288
+        unitTests.all {
+            jacoco {
+                includeNoLocationClasses = true
+                excludes = ['jdk.internal.*']
+            }
+        }
     }
 
     compileOptions {
@@ -99,7 +108,7 @@ android {
     buildTypes {
         debug {
             enableUnitTestCoverage true
-            testCoverageEnabled true
+            enableAndroidTestCoverage true
         }
         release {
             minifyEnabled true
@@ -129,6 +138,9 @@ android {
         resources {
             excludes += '/META-INF/licenses/ASM'
         }
+    }
+    testCoverage {
+        jacocoVersion '0.8.14'
     }
 }
 
@@ -178,18 +190,6 @@ def configurePOM(MavenPom pom, boolean noDependencies, def artifactId, def versi
                 dependencyNode.appendNode('artifactId', dependency.name)
 
                 dependencyNode.appendNode('version', dependency.version)
-
-                def matchedDependency = versions.find { _, versionInfo ->
-                    versionInfo.groupId == dependency.group && versionInfo.artifactId == dependency.name
-                }
-
-                if (matchedDependency) {
-                    def unityUpperBound = matchedDependency.value.unityUpperBound
-                    if (unityUpperBound) {
-                        // Add unityLimit as a property
-                        propertiesNode.appendNode("unityUpperBound.${dependency.group}.${dependency.name}", unityUpperBound)
-                    }
-                }
             }
         }
     }
@@ -464,52 +464,26 @@ dependencies {
     androidTestImplementation 'org.mockito:mockito-android:5.5.0'
     androidTestImplementation "org.mockito.kotlin:mockito-kotlin:4.1.0"
     androidTestImplementation 'com.squareup.okhttp3:mockwebserver:4.3.1'
-    androidTestImplementation 'androidx.test:runner:1.6.1'
-    androidTestImplementation "androidx.test:core:1.6.1"
-    androidTestUtil 'androidx.test:orchestrator:1.5.0'
-    androidTestUtil 'androidx.test.services:test-services:1.5.0'
+    androidTestImplementation libs.androidx.test.runner
+    androidTestImplementation libs.androidx.core
+    androidTestUtil libs.androidx.orchestrator
+    androidTestUtil libs.androidx.test.services
 
     testImplementation libs.junit
     testImplementation 'org.json:json:20230618'
+    testImplementation libs.coroutine.test
 
     testImplementation 'org.mockito:mockito-core:5.2.0'
     testImplementation 'org.mockito:mockito-inline:5.2.0'
     testImplementation "org.mockito.kotlin:mockito-kotlin:5.3.1"
+    testImplementation 'org.robolectric:robolectric:4.12.2'
 
-    implementation("${versions.integrity.groupId}:${versions.integrity.artifactId}") {
-        version {
-            strictly versions.integrity.range
-            prefer versions.integrity.prefer
-        }
-    }
 
-    implementation("${versions.lifecycle.groupId}:${versions.lifecycle.artifactId}") {
-        version {
-            strictly versions.lifecycle.range
-            prefer versions.lifecycle.prefer
-        }
-    }
-
-    implementation("${versions.adsIdentifier.groupId}:${versions.adsIdentifier.artifactId}") {
-        version {
-            strictly versions.adsIdentifier.range
-            prefer versions.adsIdentifier.prefer
-        }
-    }
-
-    implementation("${versions.appset.groupId}:${versions.appset.artifactId}") {
-        version {
-            strictly versions.appset.range
-            prefer versions.appset.prefer
-        }
-    }
-
-    implementation("${versions.coroutine.groupId}:${versions.coroutine.artifactId}") {
-        version {
-            strictly versions.coroutine.range
-            prefer versions.coroutine.prefer
-        }
-    }
+    implementation libs.integrity
+    implementation libs.lifecycle
+    implementation libs.adsIdentifier
+    implementation libs.appset
+    implementation libs.coroutine
 
     implementation(libs.justtrack.integrity)
 

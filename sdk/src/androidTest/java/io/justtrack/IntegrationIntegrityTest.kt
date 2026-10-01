@@ -6,10 +6,12 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.android.play.core.integrity.StandardIntegrityException
 import com.google.android.play.core.integrity.StandardIntegrityManager.StandardIntegrityTokenProvider
+import io.justtrack.api.DefaultAttributionApi
+import io.justtrack.api.IntegrityApi
 import io.justtrack.database.Database
+import io.justtrack.dtos.DTOIntegrityToken
 import io.justtrack.integrity.IntegrityToken
 import io.justtrack.integrity.StandardTokenProviderTask
-import io.justtrack.log.Logger
 import io.justtrack.publicInterface.SdkTest
 import junit.framework.TestCase.fail
 import kotlinx.coroutines.runBlocking
@@ -55,19 +57,20 @@ class IntegrationIntegrityTest {
                 return false
             }
         }
-        val httpClient = IntegrityHttpClient(httpListener)
+        val apis = IntegrityApis(httpListener)
 
         val builder = JustTrackSdkBuilder(
             (context.applicationContext as Application),
             SdkTest.API_TOKEN,
         )
         builder.setAttributionRetryDelaySeconds(3)
-        var sdk: JustTrackSdkImpl? = JustTrackSdkImpl.createForTesting(
+        var sdk: JustTrackSdkImpl? = createForTesting(
             builder,
-            httpClient,
             retryConfig,
             null,
             null,
+            attributionApi = apis,
+            integrityApi = apis,
         )
 
         val secret = sdk?.integritySecret?.await()
@@ -78,12 +81,13 @@ class IntegrationIntegrityTest {
 
         sdk?.shutdown()
 
-        sdk = JustTrackSdkImpl.createForTesting(
+        sdk = createForTesting(
             builder,
-            httpClient,
             retryConfig,
             null,
             null,
+            attributionApi = apis,
+            integrityApi = apis,
         )
 
         val reOpenSecret = sdk.integritySecret.await()
@@ -104,18 +108,19 @@ class IntegrationIntegrityTest {
                 return false
             }
         }
-        val httpClient = IntegrityHttpClient(httpListener)
+        val apis = IntegrityApis(httpListener)
 
         val builder = JustTrackSdkBuilder(
             (context.applicationContext as Application),
             SdkTest.API_TOKEN,
         )
-        val sdk: JustTrackSdkImpl = JustTrackSdkImpl.createForTesting(
+        val sdk: JustTrackSdkImpl = createForTesting(
             builder,
-            httpClient,
             retryConfig,
             null,
             null,
+            attributionApi = apis,
+            integrityApi = apis,
         )
 
         val secret = sdk.integritySecret.await()
@@ -137,19 +142,21 @@ class IntegrationIntegrityTest {
                 return false
             }
         }
-        val failHttpClient = IntegrityHttpClient(failHttpListener)
+
+        val failApiProvider = IntegrityApis(failHttpListener)
 
         val builder = JustTrackSdkBuilder(
             (context.applicationContext as Application),
             SdkTest.API_TOKEN,
         )
         builder.setAttributionRetryDelaySeconds(3)
-        var sdk: JustTrackSdkImpl = JustTrackSdkImpl.createForTesting(
+        var sdk: JustTrackSdkImpl = createForTesting(
             builder,
-            failHttpClient,
             retryConfig,
             null,
             null,
+            attributionApi = failApiProvider,
+            integrityApi = failApiProvider,
         )
 
         val secret = sdk.integritySecret.await()
@@ -173,15 +180,16 @@ class IntegrationIntegrityTest {
                 return false
             }
         }
-        val successHttpClient = IntegrityHttpClient(successHttpListener)
+        val successApis = IntegrityApis(successHttpListener)
 
         // restart sdk
-        sdk = JustTrackSdkImpl.createForTesting(
+        sdk = createForTesting(
             builder,
-            successHttpClient,
             retryConfig,
             null,
             null,
+            attributionApi = successApis,
+            integrityApi = successApis,
         )
 
         val reOpenSecret = sdk.integritySecret.await()
@@ -204,7 +212,8 @@ class IntegrationIntegrityTest {
                 return true
             }
         }
-        val httpClient = IntegrityHttpClient(httpListener)
+
+        val apis = IntegrityApis(httpListener)
         val mockStandardTokenProvider = mock<StandardIntegrityTokenProvider>()
         val standardTokenProviderTask = StandardTokenProviderTask(IntegrityToken(UUID.randomUUID().toString()))
         whenever(mockStandardTokenProvider.request(any())).then {
@@ -216,12 +225,13 @@ class IntegrationIntegrityTest {
             SdkTest.API_TOKEN,
         )
         var sdk: JustTrackSdkImpl = spy(
-            JustTrackSdkImpl.createForTesting(
+            createForTesting(
                 builder,
-                httpClient,
                 retryConfig,
                 null,
                 mockStandardTokenProvider,
+                attributionApi = apis,
+                integrityApi = apis,
             ),
         )
 
@@ -251,15 +261,16 @@ class IntegrationIntegrityTest {
                 return true
             }
         }
-        val reOpenHttpClient = IntegrityHttpClient(reOpenHttpListener)
+        val reOpenApis = IntegrityApis(reOpenHttpListener)
 
         // restart sdk
-        sdk = JustTrackSdkImpl.createForTesting(
+        sdk = createForTesting(
             builder,
-            reOpenHttpClient,
             retryConfig,
             null,
             mockStandardTokenProvider,
+            attributionApi = reOpenApis,
+            integrityApi = reOpenApis,
         )
         val result = sdk.integrityTokenPublisher.getCurrentFuture()!!.await()
         Assert.assertTrue(result)
@@ -284,7 +295,8 @@ class IntegrationIntegrityTest {
                 return true
             }
         }
-        val httpClient = IntegrityHttpClient(httpListener)
+
+        val apis = IntegrityApis(httpListener)
         whenever(mockStandardTokenProvider.request(any())).then {
             standardTokenProviderTask
         }
@@ -297,12 +309,13 @@ class IntegrationIntegrityTest {
         )
         builder.setAttributionRetryDelaySeconds(3)
         var sdk: JustTrackSdkImpl = spy(
-            JustTrackSdkImpl.createForTesting(
+            createForTesting(
                 builder,
-                httpClient,
                 retryConfig,
                 null,
                 mockStandardTokenProvider,
+                attributionApi = apis,
+                integrityApi = apis,
             ),
         )
 
@@ -331,15 +344,15 @@ class IntegrationIntegrityTest {
                 return true
             }
         }
-        val reOpenHttpClient = IntegrityHttpClient(reOpenHttpListener)
-
+        val reOpenApis = IntegrityApis(reOpenHttpListener)
         // restart sdk
-        sdk = JustTrackSdkImpl.createForTesting(
+        sdk = createForTesting(
             builder,
-            reOpenHttpClient,
             retryConfig,
             null,
             mockStandardTokenProvider,
+            attributionApi = reOpenApis,
+            integrityApi = reOpenApis,
         )
         val result = sdk.integrityTokenPublisher.getCurrentFuture()!!.await()
         Assert.assertTrue(result)
@@ -363,7 +376,8 @@ class IntegrationIntegrityTest {
                 return true
             }
         }
-        val httpClient = IntegrityHttpClient(httpListener)
+
+        val apis = IntegrityApis(httpListener)
 
         whenever(mockStandardTokenProvider.request(any())).then {
             standardTokenProviderTask
@@ -378,12 +392,13 @@ class IntegrationIntegrityTest {
         )
         builder.setAttributionRetryDelaySeconds(3)
         var sdk: JustTrackSdkImpl = spy(
-            JustTrackSdkImpl.createForTesting(
+            createForTesting(
                 builder,
-                httpClient,
                 retryConfig,
                 null,
                 mockStandardTokenProvider,
+                attributionApi = apis,
+                integrityApi = apis,
             ),
         )
 
@@ -412,15 +427,15 @@ class IntegrationIntegrityTest {
                 return true
             }
         }
-        val reOpenHttpClient = IntegrityHttpClient(reOpenHttpListener)
-
+        val reOpenApis = IntegrityApis(reOpenHttpListener)
         // restart sdk
-        sdk = JustTrackSdkImpl.createForTesting(
+        sdk = createForTesting(
             builder,
-            reOpenHttpClient,
             retryConfig,
             null,
             mockStandardTokenProvider,
+            attributionApi = reOpenApis,
+            integrityApi = reOpenApis,
         )
         val result = sdk.integrityTokenPublisher.getCurrentFuture()!!.await()
         Assert.assertTrue(result)
@@ -451,7 +466,7 @@ class IntegrationIntegrityTest {
                 }
             }
         }
-        val httpClient = spy(IntegrityHttpClient(httpListener))
+        val apis = spy(IntegrityApis(httpListener))
 
         val builder = JustTrackSdkBuilder(
             (context.applicationContext as Application),
@@ -459,12 +474,13 @@ class IntegrationIntegrityTest {
         )
         builder.setAttributionRetryDelaySeconds(3)
         var sdk: JustTrackSdkImpl = spy(
-            JustTrackSdkImpl.createForTesting(
+            createForTesting(
                 builder,
-                httpClient,
                 retryConfig,
                 null,
                 mockStandardTokenProvider,
+                attributionApi = apis,
+                integrityApi = apis,
             ),
         )
 
@@ -477,7 +493,7 @@ class IntegrationIntegrityTest {
         Assert.assertTrue(sendTokenResult)
 
         val reportedBody = DTOIntegrityToken(requestJSONObject!!)
-        verify(httpClient, times(3)).reportIntegrity(any(), any(), any())
+        verify(apis, times(3)).reportIntegrity(any(), any())
         Assert.assertEquals(integrityToken, reportedBody.integrityToken.toString())
         Assert.assertEquals(null, reportedBody.errorCode)
     }
@@ -499,19 +515,20 @@ class IntegrationIntegrityTest {
                 return false
             }
         }
-        val failHttpClient = spy(IntegrityHttpClient(failHttpListener))
+        val failApis = spy(IntegrityApis(failHttpListener))
 
         val builder = JustTrackSdkBuilder(
             (context.applicationContext as Application),
             SdkTest.API_TOKEN,
         )
         var sdk: JustTrackSdkImpl = spy(
-            JustTrackSdkImpl.createForTesting(
+            createForTesting(
                 builder,
-                failHttpClient,
                 retryConfig,
                 null,
                 mockStandardTokenProvider,
+                attributionApi = failApis,
+                integrityApi = failApis,
             ),
         )
 
@@ -523,7 +540,7 @@ class IntegrationIntegrityTest {
         Assert.assertTrue(!secret.isNullOrEmpty())
         Assert.assertFalse(sendTokenResult)
 
-        verify(failHttpClient, times(4)).reportIntegrity(any(), any(), any())
+        verify(failApis, times(4)).reportIntegrity(any(), any())
 
         sdk.shutdown()
 
@@ -539,13 +556,14 @@ class IntegrationIntegrityTest {
                 return true
             }
         }
-        val successHttpClient = spy(IntegrityHttpClient(successHttpListener))
-        sdk = JustTrackSdkImpl.createForTesting(
+        val successApis = spy(IntegrityApis(successHttpListener))
+        sdk = createForTesting(
             builder,
-            successHttpClient,
             retryConfig,
             null,
             mockStandardTokenProvider,
+            attributionApi = successApis,
+            integrityApi = successApis,
         )
         val result = sdk.integrityTokenPublisher.getCurrentFuture()!!.await()
         val reportedBody = DTOIntegrityToken(requestJSONObject!!)
@@ -578,19 +596,20 @@ class IntegrationIntegrityTest {
                 return true
             }
         }
-        val httpClient = IntegrityHttpClient(httpListener)
+        val integrityApis = IntegrityApis(httpListener)
 
         val builder = JustTrackSdkBuilder(
             (context.applicationContext as Application),
             SdkTest.API_TOKEN,
         )
         var sdk: JustTrackSdkImpl = spy(
-            JustTrackSdkImpl.createForTesting(
+            createForTesting(
                 builder,
-                httpClient,
                 retryConfig,
                 null,
                 mockStandardTokenProvider,
+                attributionApi = integrityApis,
+                integrityApi = integrityApis,
             ),
         )
 
@@ -620,23 +639,23 @@ class IntegrationIntegrityTest {
                 return true
             }
         }
-        val reOpenHttpClient = IntegrityHttpClient(reOpenHttpListener)
-
+        val reOpenApis = IntegrityApis(reOpenHttpListener)
         // restart sdk
-        sdk = JustTrackSdkImpl.createForTesting(
+        sdk = createForTesting(
             builder,
-            reOpenHttpClient,
             retryConfig,
             null,
             mockStandardTokenProvider,
+            attributionApi = reOpenApis,
+            integrityApi = reOpenApis,
         )
         val result = sdk.integrityTokenPublisher.getCurrentFuture()!!.await()
         Assert.assertTrue(result)
         Assert.assertFalse(isCallAgain)
     }
 
-    internal open class IntegrityHttpClient(private val listener: HttpClientListener) : BaseTestHttpClient() {
-        override suspend fun sendAttributionRequest(logger: Logger, body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
+    internal open class IntegrityApis(private val listener: HttpClientListener) : DefaultAttributionApi(), IntegrityApi {
+        override suspend fun sendAttributionRequest(body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
             val result = listener.reportAttribution(body)
             if (result) {
                 return Result.success(attributionResponse)
@@ -645,7 +664,7 @@ class IntegrationIntegrityTest {
             }
         }
 
-        override suspend fun reportIntegrity(logger: Logger, body: JSONEncodable, installId: String): Result<JSONObject> {
+        override suspend fun reportIntegrity(body: JSONEncodable, installId: String): Result<JSONObject> {
             val result = listener.reportIntegrity(body)
             if (result) {
                 return Result.success(JSONObject("{}"))
@@ -670,7 +689,7 @@ class IntegrationIntegrityTest {
             user.put("redownload", false)
 
             val campaign = JSONObject()
-            campaign.put("id", 42)
+            campaign.put("externalId", "42")
             campaign.put("name", "Test Campaign")
             campaign.put("type", "acquisition")
             campaign.put("organic", false)
@@ -686,7 +705,6 @@ class IntegrationIntegrityTest {
 
             val attribution = JSONObject()
             attribution.put("campaign", campaign)
-            attribution.put("type", "mcoins")
             attribution.put("channel", channel)
             attribution.put("network", network)
             attribution.put("attributedAt", Formatter.formatDateMilliseconds(Date()))

@@ -306,7 +306,7 @@ open class AppEvent private constructor(
             currency,
             (if (this.sessionId == null) sessionId else this.sessionId)!!,
             sdkVersion,
-            happenedAt,
+            happenedAt ?: Date(),
         )
     }
 

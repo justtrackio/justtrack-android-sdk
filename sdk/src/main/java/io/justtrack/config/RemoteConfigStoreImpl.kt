@@ -2,7 +2,6 @@ package io.justtrack.config
 
 import android.content.Context
 import androidx.annotation.VisibleForTesting
-import io.justtrack.getStringIO
 import org.json.JSONObject
 
 internal class RemoteConfigStoreImpl internal constructor(
@@ -56,7 +55,7 @@ internal class RemoteConfigStoreImpl internal constructor(
     }
 
     override fun getStoredAssignments(): Map<String, Assignment>? {
-        val storeAssignmentsRaw = store.getStringIO(STORE_ASSIGNMENTS_KEY, null)
+        val storeAssignmentsRaw = store.getString(STORE_ASSIGNMENTS_KEY, null)
 
         return if (storeAssignmentsRaw == null) {
             null
@@ -67,7 +66,7 @@ internal class RemoteConfigStoreImpl internal constructor(
 
     companion object {
         @VisibleForTesting
-        internal const val DEFAULT_MIN_FETCH_INTERVAL = 24 * 60 * 60L
+        internal const val DEFAULT_MIN_FETCH_INTERVAL = 60 * 60L // 1 hour
         internal const val CONSUMED_RETRY_AFTER = -1
 
         @VisibleForTesting

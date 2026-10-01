@@ -75,6 +75,9 @@
 -keep class com.android.billingclient.api.SkuDetailsParams{*;}
 -keep class com.android.billingclient.api.ProductDetailsResponseListener{*;}
 -keep class com.android.billingclient.api.QueryProductDetailsParams{*;}
+-keep class com.android.billingclient.api.QueryProductDetailsResult{*;}
+-keep class com.android.billingclient.api.PendingPurchasesParams{*;}
+-keep class com.android.billingclient.api.PendingPurchasesParams$Builder{*;}
 -keep class com.android.billingclient.api.ProductDetails{*;}
 
 -keep class io.justtrack.BillingTrackerImpl {*;}

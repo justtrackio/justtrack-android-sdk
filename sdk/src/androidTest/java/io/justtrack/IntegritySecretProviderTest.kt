@@ -25,7 +25,8 @@ internal class IntegritySecretProviderTest {
     @Test
     fun provideStoredSecret() = runBlocking {
         val installInstanceIdFuture = TestAsyncFuture(UUID.randomUUID().toString())
-        val provider = IntegritySecretProvider(TaskExecutorTest(), databaseInterface)
+        val factory = immediateTaskExecutor()
+        val provider = IntegritySecretProvider(factory, databaseInterface)
         val result = provider.getIntegritySecret(installInstanceIdFuture).execute()
         val storedResult = provider.getIntegritySecret(installInstanceIdFuture).execute()
 

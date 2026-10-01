@@ -4,8 +4,10 @@ import android.app.Application
 import android.content.Context
 import androidx.test.platform.app.InstrumentationRegistry
 import io.justtrack.Store.clearForTesting
+import io.justtrack.api.AttributionApi
+import io.justtrack.api.DefaultAttributionApi
+import io.justtrack.dtos.DTOPublishFirebaseAppInstanceIdRequest
 import io.justtrack.exceptions.InvalidFieldException
-import io.justtrack.log.Logger
 import io.justtrack.publicInterface.SdkTest
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -82,32 +84,31 @@ class FirebaseIdTest {
     @Test
     @Throws(Exception::class)
     fun firebaseIdSentAfterFirstAttribution(): Unit = runBlocking {
-        val httpClient = SlowAttributingHttpClient()
+        val api = SlowAttributingApis()
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         withSdk(
             context,
-            httpClient,
             true,
             object : SdkConsumer<Any> {
                 override suspend fun run(sdk: JustTrackSdk): Any {
                     sdk.setFirebaseAppInstanceId("my firebase id")
-                    Assert.assertFalse(httpClient.firebaseIdFuture.isDone)
+                    Assert.assertFalse(api.firebaseIdFuture.isDone)
                     sdk.attribution.await()
-                    val firebaseId = httpClient.waitForFirebaseId().firebaseInstanceId
+                    val firebaseId = api.waitForFirebaseId().firebaseInstanceId
                     Assert.assertEquals("my firebase id", firebaseId)
                     return Any()
                 }
             },
+            attributionApi = api,
         )
     }
 
     @Test
     fun testSendIdAfterInstallIdChanged(): Unit = runBlocking {
-        val httpClient = SlowAttributingHttpClient(0)
+        val api = SlowAttributingApis(0)
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         withSdk(
             context,
-            httpClient,
             true,
             object : SdkConsumer<Unit> {
                 override suspend fun run(sdk: JustTrackSdk) {
@@ -115,21 +116,21 @@ class FirebaseIdTest {
                     val newId = UUID.randomUUID().toString()
                     sdk.setFirebaseAppInstanceId(firstId).await()
                     FirebaseIdStore.getInstance().storeNewId(context, UUID.randomUUID().toString(), newId)
-                    httpClient.clearFutureId()
-                    val caughtId = httpClient.waitForFirebaseId().firebaseInstanceId
+                    api.clearFutureId()
+                    val caughtId = api.waitForFirebaseId().firebaseInstanceId
                     Assert.assertEquals(newId, caughtId)
                 }
             },
+            attributionApi = api,
         )
     }
 
     @Throws(Exception::class)
     private suspend fun runTest(test: SdkConsumer<Array<String?>>) {
-        val httpClient = FirebaseIdHttpClient()
+        val api = FirebaseIdApis()
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val expectedIds = withSdk(
             context,
-            httpClient,
             true,
             object : SdkConsumer<Array<String?>> {
                 override suspend fun run(sdk: JustTrackSdk): Array<String?> {
@@ -140,22 +141,23 @@ class FirebaseIdTest {
                     return test.run(sdk)
                 }
             },
+            attributionApi = api,
         )
 
         // Deadlock-Safety: This is a test.
-        synchronized(httpClient.firebaseIds) {
+        synchronized(api.firebaseIds) {
             Assert.assertEquals(
                 expectedIds.size,
-                httpClient.firebaseIds.size,
+                api.firebaseIds.size,
             )
             for (i in expectedIds.indices) {
-                Assert.assertEquals(expectedIds[i], httpClient.firebaseIds[i])
+                Assert.assertEquals(expectedIds[i], api.firebaseIds[i])
             }
         }
     }
 
     @Throws(Exception::class)
-    private suspend fun <T> withSdk(context: Context, httpClient: HttpClient, clearStorage: Boolean, test: SdkConsumer<T>): T {
+    private suspend fun <T> withSdk(context: Context, clearStorage: Boolean, test: SdkConsumer<T>, attributionApi: AttributionApi): T {
         if (clearStorage) {
             // reset and remove data for the test
             clearForTesting(context)
@@ -166,7 +168,13 @@ class FirebaseIdTest {
         val executor = ThreadPoolExecutor(10, 10, 60L, TimeUnit.SECONDS, LinkedBlockingDeque())
         executor.allowCoreThreadTimeOut(true)
         val builder = JustTrackSdkBuilder((context.applicationContext as Application), SdkTest.API_TOKEN)
-        val sdk = JustTrackSdkImpl.createForTesting(builder, httpClient, RetryConfig(5, 0, 5, RetryConfig.TEST_INTEGRITY_CONFIG), null, null)
+        val sdk = createForTesting(
+            builder,
+            RetryConfig(5, 0, 5, RetryConfig.TEST_INTEGRITY_CONFIG),
+            null,
+            null,
+            attributionApi = attributionApi,
+        )
         return try {
             test.run(sdk)
         } finally {
@@ -176,20 +184,14 @@ class FirebaseIdTest {
         }
     }
 
-    private class FirebaseIdHttpClient : BaseTestHttpClient() {
+    private class FirebaseIdApis : DefaultAttributionApi() {
         val firebaseIds: MutableList<String> = ArrayList()
 
-        override suspend fun sendAttributionRequest(logger: Logger, body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
+        override suspend fun sendAttributionRequest(body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
             return Result.success(AttributionTest.testAttribution)
         }
 
-        override suspend fun sendFirebaseAppInstanceId(
-            logger: Logger,
-            body: JSONEncodable,
-            advertiserId: String?,
-            uuid: String,
-            installId: String,
-        ): Result<Unit> {
+        override suspend fun sendFirebaseAppInstanceId(body: JSONEncodable, advertiserId: String?, uuid: String, installId: String): Result<Unit> {
             // Deadlock-Safety: This is a test.
             val request = DTOPublishFirebaseAppInstanceIdRequest(body.toJSON(Formatter))
             synchronized(firebaseIds) { firebaseIds.add(request.firebaseInstanceId) }
@@ -202,12 +204,11 @@ class FirebaseIdTest {
         suspend fun run(sdk: JustTrackSdk): T
     }
 
-    internal class SlowAttributingHttpClient constructor(private val sleepTime: Long = 1000) :
-        BaseTestHttpClient() {
+    internal class SlowAttributingApis(private val sleepTime: Long = 1000) : DefaultAttributionApi() {
         internal var firebaseIdFuture = ResolvableFuture<DTOPublishFirebaseAppInstanceIdRequest>()
         private val attributionDisabled = false
 
-        override suspend fun sendAttributionRequest(logger: Logger, body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
+        override suspend fun sendAttributionRequest(body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
             try {
                 Thread.sleep(sleepTime)
             } catch (e: InterruptedException) {
@@ -219,13 +220,7 @@ class FirebaseIdTest {
             return Result.success(AttributionTest.testAttribution)
         }
 
-        override suspend fun sendFirebaseAppInstanceId(
-            logger: Logger,
-            body: JSONEncodable,
-            advertiserId: String?,
-            uuid: String,
-            installId: String,
-        ): Result<Unit> {
+        override suspend fun sendFirebaseAppInstanceId(body: JSONEncodable, advertiserId: String?, uuid: String, installId: String): Result<Unit> {
             firebaseIdFuture.resolve(DTOPublishFirebaseAppInstanceIdRequest(body.toJSON(Formatter)))
             return Result.success(Unit)
         }

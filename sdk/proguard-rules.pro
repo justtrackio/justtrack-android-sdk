@@ -134,10 +134,6 @@
     public *;
 }
 
--keep public class io.justtrack.SdkBuilder {
-    public *;
-}
-
 -keep public class io.justtrack.Subscription {
     public *;
 }

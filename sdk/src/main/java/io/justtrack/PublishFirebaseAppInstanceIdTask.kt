@@ -1,15 +1,17 @@
 package io.justtrack
 
 import android.content.Context
-import io.justtrack.attribution.AdvertiserIdInfo
+import io.justtrack.api.AttributionApi
+import io.justtrack.dtos.DTOPublishFirebaseAppInstanceIdRequest
 import io.justtrack.log.Logger
 import io.justtrack.log.LoggerFieldsBuilder
+import io.justtrack.providers.AdvertiserIdProvider
 
 internal class PublishFirebaseAppInstanceIdTask(
     private val context: Context,
     private val attributionIdManager: AttributionIdManager,
     private val loggerParams: LoggerParams,
-    private val httpClient: HttpClient,
+    private val attributionApi: AttributionApi,
     private val attributionParams: AttributionParams,
     private val reason: String,
 ) : Task<Boolean> {
@@ -30,7 +32,7 @@ internal class PublishFirebaseAppInstanceIdTask(
                 return false
             }
 
-            val advertiserIdValue = attributionParams.advertiserIdFuture.await().advertiserId
+            val advertiserIdValue = attributionParams.advertiserIdProvider.provideAdvertiserId().await().advertiserId
             val body: JSONEncodable = DTOPublishFirebaseAppInstanceIdRequest(userId, attributionParams.firebaseId)
             loggerParams.logger.info(
                 "Publishing new Firebase app instance id",
@@ -39,8 +41,7 @@ internal class PublishFirebaseAppInstanceIdTask(
                     .with("reason", reason),
             )
 
-            val result = httpClient.sendFirebaseAppInstanceId(
-                loggerParams.logger,
+            val result = attributionApi.sendFirebaseAppInstanceId(
                 body,
                 advertiserIdValue,
                 userId,
@@ -70,7 +71,7 @@ internal class PublishFirebaseAppInstanceIdTask(
 
     internal data class AttributionParams(
         val userIdFuture: AsyncFuture<String>,
-        val advertiserIdFuture: AsyncFuture<AdvertiserIdInfo>,
+        val advertiserIdProvider: AdvertiserIdProvider,
         val firebaseId: String,
     )
 

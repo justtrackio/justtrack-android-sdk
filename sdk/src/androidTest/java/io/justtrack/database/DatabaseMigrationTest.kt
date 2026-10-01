@@ -36,7 +36,7 @@ class DatabaseMigrationTest {
      */
     private fun createDatabaseAtVersion(version: Int, insertData: ((db: Database) -> Unit)? = null): Database {
         // Create a custom Database class instance with the old version.
-        val db = Database(context, logger, AttributionDAOImpl(logger), version = version)
+        val db = Database(context, logger, AttributionDAOImpl(context, logger), version = version)
         if (insertData != null) {
             insertData(db)
         }
@@ -52,7 +52,7 @@ class DatabaseMigrationTest {
         }
 
         // 2. Open the database at version 6, triggering onDowngrade
-        val newDb = Database(context, logger, AttributionDAOImpl(logger), version = 6, isDebugModeEnabled = false)
+        val newDb = Database(context, logger, AttributionDAOImpl(context, logger), version = 6, isDebugModeEnabled = false)
 
         // 3. Verify that the MESSAGE table exists but is empty
         val messageCount = newDb.readableDatabase.rawQuery("SELECT COUNT(*) FROM message", null).use {
@@ -80,7 +80,7 @@ class DatabaseMigrationTest {
 
         assertThrows(IllegalStateException::class.java) {
             // When trying to downgrade in debug mode, we should get a crash
-            Database(context, logger, AttributionDAOImpl(logger), version = 6, isDebugModeEnabled = true)
+            Database(context, logger, AttributionDAOImpl(context, logger), version = 6, isDebugModeEnabled = true)
         }
     }
 }

@@ -113,8 +113,8 @@ class AppLovinMaxIntegrationAdapter(
                         )
 
                     result?.registerCallback(
-                        object : Callback<Void> {
-                            override fun resolve(response: Void) {
+                        object : Callback<Void?> {
+                            override fun resolve(response: Void?) {
                                 // nop
                             }
 

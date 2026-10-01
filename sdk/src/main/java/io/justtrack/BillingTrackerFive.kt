@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.core.util.Consumer
 import io.justtrack.events.Money
 import io.justtrack.log.Logger
+import io.justtrack.util.ExcludeFromJacocoGeneratedReport
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
@@ -11,15 +12,16 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
 /**
- * This BillingTracker implementation will be used if the client is using BillingClient version 5 & 6.
- * Since BillingClient V6.0 does not deprecate existing API or adding any additional API for tracking IAP.
+ * This BillingTracker implementation is used with BillingClient versions 5 through 7.
+ * The APIs used for purchase tracking remain compatible across those versions.
  */
-internal class BillingTrackerFive(
-    sdk: BaseJustTrackSdk,
+@ExcludeFromJacocoGeneratedReport
+internal open class BillingTrackerFive(
+    sdk: JustTrackSdkImpl,
     context: Context,
     logger: Logger,
-    val billingVersion: BillingTrackerFactory.BillingVersion,
-) : BillingTracker(sdk, context, logger) {
+    billingVersion: BillingTrackerFactory.BillingVersion,
+) : BillingTracker(sdk, context, logger, billingVersion) {
     override fun transformPurchase(purchases: List<Any>): List<ProductPurchase> {
         val result = purchases.map { purchase ->
             val getSkuMethod = purchase.javaClass.getMethod("getProducts")
@@ -45,12 +47,12 @@ internal class BillingTrackerFive(
         val listener = Proxy.newProxyInstance(
             detailListenerClass.classLoader,
             arrayOf(detailListenerClass),
+            @ExcludeFromJacocoGeneratedReport
             object : InvocationHandler {
                 override fun invoke(proxy: Any?, method: Method?, args: Array<out Any>?): Any {
                     if (method == null || args == null) return ""
                     if (method.name.equals("onProductDetailsResponse")) {
-                        val skuDetailsList =
-                            args[1].convertToList<Any>()
+                        val skuDetailsList = extractProductDetails(args[1])
                         try {
                             consumer.accept(
                                 skuDetailsList?.map {
@@ -87,6 +89,8 @@ internal class BillingTrackerFive(
             logger.warn("Failed to fetch IAP purchase details: ${billingVersion.name}", exception)
         }
     }
+
+    protected open fun extractProductDetails(response: Any): List<Any>? = response.convertToList()
 
     @Throws(java.lang.Exception::class)
     private fun getPurchaseTotalPrice(productDetail: Any, productType: ProductType): Money {
@@ -159,6 +163,7 @@ internal class BillingTrackerFive(
         val purchaseHistoryListener = Proxy.newProxyInstance(
             purchaseHistoryResponseListenerClass.classLoader,
             arrayOf(purchaseHistoryResponseListenerClass),
+            @ExcludeFromJacocoGeneratedReport
             object : InvocationHandler {
                 override fun invoke(proxy: Any?, method: Method?, args: Array<out Any>?): Any? {
                     if (method == null || args == null) {

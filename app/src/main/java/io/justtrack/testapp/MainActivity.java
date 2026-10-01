@@ -30,7 +30,6 @@ import io.justtrack.AppEvent;
 import io.justtrack.Callback;
 import io.justtrack.JustTrackSdk;
 import io.justtrack.JustTrackSdkBuilder;
-import io.justtrack.SdkBuilder;
 import io.justtrack.Subscription;
 import io.justtrack.ads.AdImpression;
 import io.justtrack.ads.AdUnit;
@@ -75,7 +74,7 @@ public class MainActivity extends BaseActivity<ActivityMainBinding> {
         @Nullable String configureAppVersionName = intent.getStringExtra("configure_version_name");
         @Nullable String configureAppVersionCode = intent.getStringExtra("configure_version_code");
 
-        SdkBuilder builder = new JustTrackSdkBuilder(this, BuildConfig.APP_KEY)
+        JustTrackSdkBuilder builder = new JustTrackSdkBuilder(this, BuildConfig.APP_KEY)
                 .setInstallUncaughtExceptionHandler(true)
                 .setManualStart(isManualStart)
                 .setAutomaticInAppPurchaseTracking(isAutoIap)
@@ -102,7 +101,11 @@ public class MainActivity extends BaseActivity<ActivityMainBinding> {
             builder.setLogger(new CustomLogger());
         }
 
+        builder.setEnableConnectionTracking(true);
+
         MainApplication.initSdk(this, builder.build());
+
+        refreshIsTracking();
 
         try {
             MainApplication.sdk.integrateWith(new FirebaseIntegrationAdapter());
@@ -174,13 +177,19 @@ public class MainActivity extends BaseActivity<ActivityMainBinding> {
         binding.startTrackingButton.setOnClickListener(this::onStartTrackingClick);
         binding.stopTrackingButton.setOnClickListener(this::onStopTrackingClick);
         binding.reFetchButton.setOnClickListener(this::reFetchButtonClick);
+        binding.isTrackingRefreshButton.setOnClickListener(this::refreshIsTrackingClick);
         binding.anonymousButton.setOnClickListener(this::anonymousClick);
         binding.experimentButton.setOnClickListener(this::experimentClick);
 
-        MainApplication.isSdkTracking.observe(this, aBoolean -> binding.isTrackingTextView.setText("isTracking: " + aBoolean.toString()));
-        if (!isManualStart) {
-            displayAttribution(MainApplication.sdk);
-        }
+    }
+
+    private void refreshIsTrackingClick(View view) {
+        refreshIsTracking();
+    }
+
+    private void refreshIsTracking() {
+        boolean isTracking = MainApplication.sdk.isRunning();
+        binding.isTrackingTextView.setText("isTracking: " + isTracking);
     }
 
     private void showTab(int index) {
@@ -206,7 +215,6 @@ public class MainActivity extends BaseActivity<ActivityMainBinding> {
     @Override
     protected void onResume() {
         super.onResume();
-        IronSource.onResume(this);
 
         Intent intent = getIntent();
         if (intent != null) {
@@ -295,24 +303,10 @@ public class MainActivity extends BaseActivity<ActivityMainBinding> {
                 runOnUiThread(() -> binding.advertiserIdTextView.setText(exception.getMessage()));
             }
         });
-        sdk.getTestGroupId().registerCallback(new Callback<Integer>() {
-            @Override
-            public void resolve(@Nullable Integer testGroupId) {
-                runOnUiThread(() -> binding.testGroupView.setText("Test Group Id: " + testGroupId));
-                Log.i(TAG, "Test Group Id: " + testGroupId);
-            }
-
-            @Override
-            public void reject(@NonNull Throwable exception) {
-                Log.e(TAG, "error during getTestGroupId", exception);
-                runOnUiThread(() -> binding.testGroupView.setText(exception.getMessage()));
-            }
-        });
     }
 
     private void showUserData(@NonNull Attribution response, @NonNull String source) {
         Log.i(TAG, "From " + source + ": User Type: " + response.getUserType());
-        Log.i(TAG, "From " + source + ": Attribution Type: " + response.getType());
         Log.i(TAG, "From " + source + ": Campaign Type: " + response.getCampaign().getType());
         Log.i(TAG, "From " + source + ": Partner: " + response.getPartner().getName() + ", " + response.getPartner().getId());
     }
@@ -516,7 +510,8 @@ public class MainActivity extends BaseActivity<ActivityMainBinding> {
         sdk.track(new JtResourceEvent("source", "weapon", "Black Sword", "45"));
         sdk.track(new JtResourceEvent("source", "weapon", "White Sword", "42", 1));
 
-        sdk.track(new JtPurchaseEvent("clicked", "1", null, "purchase", 1));
+        sdk.track(new JtPurchaseEvent(JtPurchaseEvent.Action.VIEW, "1", null, "purchase", 1));
+        sdk.track(new JtPurchaseEvent(JtPurchaseEvent.Action.CLICK, "1", null, "purchase", 1));
         sdk.track(new JtPurchaseEvent("click", "2", null, "subscription", 2));
 
         sdk.track(new JtAdEvent(
@@ -655,7 +650,7 @@ public class MainActivity extends BaseActivity<ActivityMainBinding> {
     private void onStartTrackingClick(View view) {
         assert view != null;
         MainApplication.sdk.start();
-        MainApplication.isSdkTracking.postValue(true);
+        refreshIsTracking();
         displayAttribution(MainApplication.sdk);
 
         new Thread(() -> {
@@ -708,7 +703,7 @@ public class MainActivity extends BaseActivity<ActivityMainBinding> {
     private void onStopTrackingClick(View view) {
         assert view != null;
         MainApplication.sdk.stop();
-        MainApplication.isSdkTracking.postValue(false);
+        refreshIsTracking();
     }
 
     private void reFetchButtonClick(View view){

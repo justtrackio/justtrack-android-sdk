@@ -53,9 +53,11 @@ public class IronSourceActivity extends BaseActivity<ActivityIronSourceBinding> 
             LevelPlay.setConsent(true);
             // If the sdk builder apply customId already please remove this line.
             runOnUiThread(() -> {
-                LevelPlayInitRequest initRequest = new LevelPlayInitRequest.Builder(BuildConfig.IRONSOURCE_KEY)
-                        .withUserId("UserID")
-                        .build();
+                LevelPlayInitRequest.Builder builder = new LevelPlayInitRequest.Builder(BuildConfig.IRONSOURCE_KEY);
+                if (customUserId != null) {
+                    builder.withUserId(customUserId);
+                }
+                LevelPlayInitRequest initRequest = builder.build();
                 LevelPlayInitListener initListener = new LevelPlayInitListener() {
                     @Override
                     public void onInitFailed(@NonNull LevelPlayInitError error) {
@@ -63,7 +65,7 @@ public class IronSourceActivity extends BaseActivity<ActivityIronSourceBinding> 
                     }
                     @Override
                     public void onInitSuccess(LevelPlayConfiguration configuration) {
-                        MainApplication.sdk.integrateWith(new IronSourceIntegrationAdapter(customUserId));
+                        MainApplication.sdk.integrateWith(new IronSourceIntegrationAdapter());
                         LevelPlay.launchTestSuite(IronSourceActivity.this);
                     }
                 };

@@ -9,10 +9,10 @@ import org.junit.Test;
 public class ReAttributionDeciderTest {
     @Test
     public void checkAttributionDecisions() {
-        Assert.assertTrue(AttributionDecision.FETCH_FIRST_ATTRIBUTION.shouldFetchAttribution());
-        Assert.assertTrue(AttributionDecision.FETCH_RETARGETING_ATTRIBUTION.shouldFetchAttribution());
-        Assert.assertTrue(AttributionDecision.FETCH_RETARGETING_ATTRIBUTION_DELAYED.shouldFetchAttribution());
-        Assert.assertFalse(AttributionDecision.USE_STORED_ATTRIBUTION.shouldFetchAttribution());
+        Assert.assertTrue(AttributionDecision.FETCH_FIRST_ATTRIBUTION.getShouldFetchAttribution());
+        Assert.assertTrue(AttributionDecision.FETCH_RETARGETING_ATTRIBUTION.getShouldFetchAttribution());
+        Assert.assertTrue(AttributionDecision.FETCH_RETARGETING_ATTRIBUTION_DELAYED.getShouldFetchAttribution());
+        Assert.assertFalse(AttributionDecision.USE_STORED_ATTRIBUTION.getShouldFetchAttribution());
 
         Assert.assertFalse(AttributionDecision.FETCH_FIRST_ATTRIBUTION.isFetchRetargetingAttribution());
         Assert.assertTrue(AttributionDecision.FETCH_RETARGETING_ATTRIBUTION.isFetchRetargetingAttribution());

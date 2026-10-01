@@ -30,7 +30,6 @@ public class MainApplication extends Application {
     public static String customUserId = null;
     @Nullable
     public static SQLiteDatabaseHelper databaseHelper;
-    public static final MutableLiveData<Boolean> isSdkTracking = new MutableLiveData<>(false);
 
     @Override
     public void onCreate() {

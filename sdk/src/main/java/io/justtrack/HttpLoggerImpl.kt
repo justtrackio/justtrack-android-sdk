@@ -1,5 +1,12 @@
 package io.justtrack
 
+import io.justtrack.api.LogApi
+import io.justtrack.dtos.DTOAppVersion
+import io.justtrack.dtos.DTOLogInput
+import io.justtrack.dtos.DTOLogMessage
+import io.justtrack.dtos.DTOLogMetric
+import io.justtrack.dtos.DTOSdkVersion
+import io.justtrack.dtos.LogLevel
 import io.justtrack.exceptions.AwaitingIdException
 import io.justtrack.log.Logger
 import io.justtrack.log.LoggerFields
@@ -15,13 +22,11 @@ import java.util.UUID
 
 internal class HttpLoggerImpl internal constructor(
     override val fallback: Logger,
-    val httpClient: HttpClient,
+    private val logApi: LogApi,
     private val versionBundle: VersionBundle,
     private val logAggregator: LogAggregator,
 ) : HttpLogger {
     private var advertiserId: String? = null
-    private var logMessageRules: DTOAttributionOutputSdkLog? = null
-    private var metricRules: DTOAttributionOutputSdkMetric? = null
     private var breadCrumbReporter: BreadCrumbReporter? = null
 
     private var userId: String? = null
@@ -106,11 +111,6 @@ internal class HttpLoggerImpl internal constructor(
         }
     }
 
-    override fun setLogAndMetricRules(config: DTOAttributionOutputSdkConfig) {
-        this.logMessageRules = config.log
-        this.metricRules = config.metric
-    }
-
     @Throws(Exception::class)
     override fun close() {
         logAggregator.close()
@@ -134,27 +134,10 @@ internal class HttpLoggerImpl internal constructor(
         val installInstanceId = this@HttpLoggerImpl.installInstanceId
 
         val sdkVersion = versionBundle.sdkVersion
-        val metricRules = this.metricRules
-        val reducedMessages = EventLimiter.filterLogMessages(messages, logMessageRules, fallback)
-
-        val reduceMetric: Collection<DTOLogMetric> = if (metricRules != null) {
-            EventLimiter.filterByRules(
-                metrics,
-                metricRules.rules,
-                fallback,
-            ) { obj: DTOLogMetric -> LogMetricDatum(obj) }
-        } else {
-            metrics
-        }
-
-        if (reducedMessages.isEmpty() && reduceMetric.isEmpty()) {
-            // no logs or metrics left to send, we are done
-            return Result.success(Unit)
-        }
 
         val body: JSONEncodable = DTOLogInput(
-            reducedMessages,
-            reduceMetric,
+            messages,
+            metrics,
             DTOAppVersion(versionBundle.applicationVersion.getVersionName(), versionBundle.applicationVersion.getVersionCode()),
             DTOSdkVersion(
                 sdkVersion.major,
@@ -167,7 +150,7 @@ internal class HttpLoggerImpl internal constructor(
             Date(),
         )
 
-        val result = httpClient.sendLogs(
+        val result = logApi.sendLogs(
             this@HttpLoggerImpl,
             body,
             advertiserId,

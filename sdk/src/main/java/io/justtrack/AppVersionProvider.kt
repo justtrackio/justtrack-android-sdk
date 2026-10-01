@@ -1,5 +1,6 @@
 package io.justtrack
 
+import io.justtrack.executor.TaskExecutor
 import java.util.concurrent.Future
 
 /**
@@ -22,7 +23,7 @@ internal class AppVersionProvider internal constructor(
         val currentAppVersionInfo = appVersionUpdateInfo
 
         return if (currentAppVersionInfo == null) {
-            val result = taskExecutor.executeAsFuture(
+            val result = taskExecutor.executeFuture(
                 GetAppVersionUpdateInfoTask(
                     databaseInterface,
                     currentVersion,
@@ -44,7 +45,7 @@ internal class AppVersionProvider internal constructor(
                 return lastVersion.appLastVersion
             }
         }
-        return taskExecutor.executeAsFuture(task)
+        return taskExecutor.executeFuture(task)
     }
 
     internal class GetAppVersionUpdateInfoTask(

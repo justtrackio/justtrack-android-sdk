@@ -1,9 +1,9 @@
 package io.justtrack.integrations.ironsource
 
 import android.content.Context
-import com.ironsource.mediationsdk.IronSource
-import com.ironsource.mediationsdk.impressionData.ImpressionData
-import com.ironsource.mediationsdk.impressionData.ImpressionDataListener
+import com.unity3d.mediation.LevelPlay
+import com.unity3d.mediation.impression.LevelPlayImpressionData
+import com.unity3d.mediation.impression.LevelPlayImpressionDataListener
 import io.justtrack.Callback
 import io.justtrack.JustTrackSdk
 import io.justtrack.ads.AdImpression
@@ -13,22 +13,15 @@ import io.justtrack.integrations.IntegrationAdapter
 import io.justtrack.log.Logger
 import io.justtrack.log.LoggerFieldsBuilder
 
-class IronSourceIntegrationAdapter(
-    private val userId: String?,
-) : IntegrationAdapter {
+class IronSourceIntegrationAdapter : IntegrationAdapter {
     private var logger: Logger? = null
     private var sdk: JustTrackSdk? = null
 
     private val impressionListener =
-        object : ImpressionDataListener {
-            override fun onImpressionSuccess(impressionData: ImpressionData?) {
+        object : LevelPlayImpressionDataListener {
+            override fun onImpressionSuccess(impressionData: LevelPlayImpressionData) {
                 try {
-                    if (impressionData == null) {
-                        logger?.warn("ImpressionData is null. Are you testing?")
-                        return
-                    }
-
-                    val adUnitName = impressionData.adUnit
+                    val adUnitName = impressionData.mediationAdUnitName
                     if (adUnitName == null) {
                         logger?.warn("AdUnit is null. Are you testing?")
                         return
@@ -39,14 +32,14 @@ class IronSourceIntegrationAdapter(
                     val abTesting = impressionData.ab
                     val segmentName = impressionData.segmentName
                     val instanceName = impressionData.instanceName
-                    // Assuming revenue is a Double, adjust if it's a different type
-                    val revenue = impressionData.revenue
+
+                    val revenue = impressionData.revenue ?: 0.0
 
                     val adUnit =
                         when (adUnitName) {
-                            "banner" -> AdUnit.Banner
-                            "interstitial" -> AdUnit.Interstitial
-                            "rewarded_video" -> AdUnit.Rewarded
+                            "Banner" -> AdUnit.Banner
+                            "Interstitial" -> AdUnit.Interstitial
+                            "Rewarded" -> AdUnit.Rewarded
                             else -> {
                                 logger?.error(
                                     "Ironsource event contained invalid ad unit $adUnitName",
@@ -75,8 +68,8 @@ class IronSourceIntegrationAdapter(
                     if (justtrackSdk != null) {
                         justtrackSdk.forwardAdImpression(adImpression)
                             .registerCallback(
-                                object : Callback<Void> {
-                                    override fun resolve(response: Void) {
+                                object : Callback<Void?> {
+                                    override fun resolve(response: Void?) {
                                         // noop
                                     }
 
@@ -102,11 +95,7 @@ class IronSourceIntegrationAdapter(
         this.logger = logger
         this.sdk = sdk
         try {
-            if (userId != null) {
-                IronSource.setUserId(userId)
-            }
-
-            IronSource.addImpressionDataListener(impressionListener)
+            LevelPlay.addImpressionDataListener(impressionListener)
         } catch (exception: Throwable) {
             logger.error("Failed to initialize IronSource integration", exception)
         }

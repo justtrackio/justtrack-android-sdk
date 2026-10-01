@@ -4,11 +4,13 @@ import android.app.Application
 import android.content.Context
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import io.justtrack.api.DefaultAttributionApi
+import io.justtrack.api.DefaultEventApi
 import io.justtrack.database.Database
+import io.justtrack.dtos.DTOAppEvent
 import io.justtrack.events.JtAppInstallEvent
 import io.justtrack.events.JtAppOpenEvent
 import io.justtrack.events.JtSessionTrackingEvent
-import io.justtrack.log.Logger
 import io.justtrack.publicInterface.SdkTest
 import io.justtrack.versions.ApplicationVersionImpl
 import kotlinx.coroutines.delay
@@ -49,12 +51,15 @@ class EventsTest {
                         SdkTest.API_TOKEN,
                     )
                     val events = ArrayList<TestEvent>()
-                    val sdk = JustTrackSdkImpl.createForTesting(
+                    val successAttributionApi = SuccessAttributionApi()
+                    val eventApi = EventCollectingApis(events)
+                    val sdk = createForTesting(
                         builder,
-                        EventCollectingHttpClient(events),
                         RetryConfig.DEFAULT_CONFIG,
                         null,
                         null,
+                        attributionApi = successAttributionApi,
+                        eventApi = eventApi,
                     )
                     val published = sdk.publishEvent(AppEvent("custom_event_name"))
 
@@ -153,25 +158,20 @@ class EventsTest {
         suspend fun runTest(expectedEventOrders: Array<Array<TestEvent>>)
     }
 
-    private class EventCollectingHttpClient(private val events: MutableList<TestEvent>) :
-        BaseTestHttpClient() {
-        override suspend fun sendAttributionRequest(logger: Logger, body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
-            return Result.success(AttributionTest.testAttribution)
-        }
-
-        override suspend fun sendUserEvents(
-            logger: Logger,
-            body: DTOAppEvent,
-            advertiserId: String?,
-            uuid: String,
-            installId: String,
-        ): Result<JSONObject?> {
+    private class EventCollectingApis(private val events: MutableList<TestEvent>) : DefaultEventApi() {
+        override suspend fun sendUserEvents(body: DTOAppEvent, advertiserId: String?, uuid: String, installId: String): Result<JSONObject?> {
             synchronized(this) {
                 for (event in body.events) {
                     events.add(TestEvent(event.name, action = event.dimensions?.optString("jt_action", null)))
                 }
             }
             return Result.success(JSONObject())
+        }
+    }
+
+    private class SuccessAttributionApi() : DefaultAttributionApi() {
+        override suspend fun sendAttributionRequest(body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
+            return Result.success(AttributionTest.testAttribution)
         }
     }
 }

@@ -6,6 +6,8 @@ import android.net.ConnectivityManager
 import android.os.Build
 
 internal interface ConnectivityProvider {
+    val connectionType: ConnectionType
+
     fun registerOnReconnected(callback: ConnectivityCallback): Subscription
 
     fun shutdown()

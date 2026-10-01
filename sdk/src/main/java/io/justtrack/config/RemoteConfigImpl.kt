@@ -5,12 +5,13 @@ import io.justtrack.AsyncFuture
 import io.justtrack.DatabaseInterface
 import io.justtrack.DeviceInfo
 import io.justtrack.ErrorFuture
-import io.justtrack.HttpClient
 import io.justtrack.SdkFirstInitializationTimestampRepo
-import io.justtrack.TaskExecutor
-import io.justtrack.attribution.AdvertiserIdInfo
+import io.justtrack.UserIdProvider
+import io.justtrack.executor.TaskExecutor
+import io.justtrack.api.ConfigApi
 import io.justtrack.exceptions.SdkNotTrackingException
 import io.justtrack.log.Logger
+import io.justtrack.providers.AdvertiserIdProvider
 import io.justtrack.versions.SdkVersion
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -20,7 +21,7 @@ internal class RemoteConfigImpl internal constructor(
     attributionParams: AttributionParams,
     sdkFirstInitializationTimestampRepo: SdkFirstInitializationTimestampRepo,
     private val taskExecutor: TaskExecutor,
-    httpClient: HttpClient,
+    configApi: ConfigApi,
     logger: Logger,
 ) : RemoteConfig {
     private val retryTimeouts: List<Int> = listOf(FIRST_RETRY_ATTEMPT, SECOND_RETRY_ATTEMPT, THIRD_RETRY_ATTEMPT)
@@ -34,7 +35,7 @@ internal class RemoteConfigImpl internal constructor(
     private val remoteConfigProvider = RemoteConfigProvider(
         remoteConfigStore,
         taskExecutor,
-        httpClient,
+        configApi,
         attributionParams,
         remoteConfigTimeStamp,
         logger,
@@ -44,7 +45,7 @@ internal class RemoteConfigImpl internal constructor(
     private val remoteConfigActivator = RemoteConfigActivator(
         remoteConfigStore,
         taskExecutor,
-        httpClient,
+        configApi,
         attributionParams,
         logger,
         retryTimeouts,
@@ -61,6 +62,7 @@ internal class RemoteConfigImpl internal constructor(
         if (!isTracking.get()) {
             return ErrorFuture(SdkNotTrackingException())
         }
+
         return remoteConfigActivator.activate(experiments)
     }
 
@@ -69,7 +71,7 @@ internal class RemoteConfigImpl internal constructor(
             return ErrorFuture(SdkNotTrackingException())
         }
 
-        return taskExecutor.executeAsFuture {
+        return taskExecutor.executeFuture {
             fetch().await()
             val experiments = getAll()?.map { it.experimentId }
             if (experiments != null) {
@@ -127,12 +129,11 @@ internal class RemoteConfigImpl internal constructor(
 
     internal data class AttributionParams(
         internal val installInstanceIdProvider: () -> AsyncFuture<String>,
-        internal val userIdProvider: () -> AsyncFuture<String>,
-        internal val deviceIdProvider: () -> AsyncFuture<AdvertiserIdInfo>,
+        internal val userIdProvider: UserIdProvider,
+        internal val advertiserIdProvider: AdvertiserIdProvider,
         internal val attributionDatabase: DatabaseInterface,
         internal val deviceInfo: DeviceInfo,
         internal val sdkVersion: SdkVersion,
-
     )
 
     private companion object {

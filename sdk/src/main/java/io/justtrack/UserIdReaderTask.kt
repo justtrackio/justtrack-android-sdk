@@ -1,11 +1,10 @@
 package io.justtrack
 
-import io.justtrack.attribution.AdvertiserIdInfo
 import io.justtrack.log.Logger
+import io.justtrack.providers.AdvertiserIdProvider
 import java.security.MessageDigest
 import java.security.NoSuchAlgorithmException
 import java.util.Locale
-import java.util.UUID
 import kotlin.experimental.xor
 
 internal class UserIdReaderTask(
@@ -14,9 +13,9 @@ internal class UserIdReaderTask(
     private val attributionIdManager: AttributionIdManager,
     private val attributionParams: AttributionParams,
     private val applicationPackageName: String,
-) : Task<UUID> {
+) : Task<String> {
     @Throws(NoSuchAlgorithmException::class, RuntimeException::class)
-    override suspend fun execute(): UUID {
+    override suspend fun execute(): String {
         try {
             val result = getOrCreateUserId(
                 logger,
@@ -24,7 +23,7 @@ internal class UserIdReaderTask(
                 attributionParams,
                 applicationPackageName,
             )
-            return UUID.fromString(result)
+            return result
         } catch (e: Exception) {
             logger.error("Unable to create user id", e)
             throw e
@@ -45,7 +44,7 @@ internal class UserIdReaderTask(
         } else {
             val userIdString = createUserId(
                 logger,
-                attributionParams.advertiserIdFuture.await().advertiserId,
+                attributionParams.advertiserIdProvider.provideAdvertiserId().await().advertiserId,
                 attributionParams.trackingId,
                 deviceInfo.getAndroidIdOrDefault(""),
                 applicationPackageName,
@@ -109,7 +108,7 @@ internal class UserIdReaderTask(
     }
 
     internal data class AttributionParams(
-        internal val advertiserIdFuture: AsyncFuture<AdvertiserIdInfo>,
+        internal val advertiserIdProvider: AdvertiserIdProvider,
         internal val trackingId: String?,
     )
 

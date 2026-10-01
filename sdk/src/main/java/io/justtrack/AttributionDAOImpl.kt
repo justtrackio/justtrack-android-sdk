@@ -6,17 +6,14 @@ import androidx.annotation.VisibleForTesting
 import io.justtrack.AttributionImpl.CampaignImpl
 import io.justtrack.AttributionImpl.ChannelImpl
 import io.justtrack.AttributionImpl.PartnerImpl
-import io.justtrack.TestGroupIdReaderTask.TestGroupId
 import io.justtrack.database.AttributionEntity
 import io.justtrack.database.Database.Companion.ATTRIBUTION_TABLE_NAME
 import io.justtrack.log.Logger
 import io.justtrack.versions.ApplicationVersionImpl
-import org.json.JSONException
-import org.json.JSONObject
 import java.util.Date
 import java.util.UUID
 
-internal open class AttributionDAOImpl internal constructor(consoleLogger: Logger) : AttributionDAO {
+internal open class AttributionDAOImpl internal constructor(private val context: Context, consoleLogger: Logger) : AttributionDAO {
 
     internal var logger: Logger = consoleLogger
 
@@ -30,7 +27,7 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
                 "$ATTRIBUTION_USER_ID text, " +
                 "$ATTRIBUTION_INSTALL_ID text, " +
                 "$ATTRIBUTION_USER_TYPE text, " +
-                "$ATTRIBUTION_CAMPAIGN_ID Integer, " +
+                "$ATTRIBUTION_CAMPAIGN_EXTERNAL_ID text, " +
                 "$ATTRIBUTION_CAMPAIGN_NAME text, " +
                 "$ATTRIBUTION_CAMPAIGN_TYPE text, " +
                 "$ATTRIBUTION_CAMPAIGN_ORGANIC Integer, " +
@@ -49,11 +46,9 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
                 "$ATTRIBUTION_INSTALL_APP_VERSION_CODE String, " +
                 "$ATTRIBUTION_LAST_APP_VERSION String, " +
                 "$ATTRIBUTION_LAST_APP_VERSION_CODE String, " +
-                "$ATTRIBUTION_TEST_GROUP Integer, " +
                 "$ATTRIBUTION_FIRST_ATTRIBUTION_AT Integer, " +
                 "$ATTRIBUTION_LAST_ATTRIBUTION_AT Integer, " +
                 "$ATTRIBUTION_LAST_OPEN_AT Integer, " +
-                "$ATTRIBUTION_CONFIG text, " +
                 "$ATTRIBUTION_REDOWNLOAD Integer " +
                 ")",
         )
@@ -68,7 +63,7 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
                 "$ATTRIBUTION_USER_ID, " +
                 "$ATTRIBUTION_INSTALL_ID, " +
                 "$ATTRIBUTION_USER_TYPE, " +
-                "$ATTRIBUTION_CAMPAIGN_ID, " +
+                "$ATTRIBUTION_CAMPAIGN_EXTERNAL_ID, " +
                 "$ATTRIBUTION_CAMPAIGN_NAME, " +
                 "$ATTRIBUTION_CAMPAIGN_TYPE, " +
                 "$ATTRIBUTION_CAMPAIGN_ORGANIC, " +
@@ -87,15 +82,13 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
                 "$ATTRIBUTION_INSTALL_APP_VERSION_CODE, " +
                 "$ATTRIBUTION_LAST_APP_VERSION, " +
                 "$ATTRIBUTION_LAST_APP_VERSION_CODE, " +
-                "$ATTRIBUTION_TEST_GROUP, " +
                 "$ATTRIBUTION_FIRST_ATTRIBUTION_AT, " +
                 "$ATTRIBUTION_LAST_ATTRIBUTION_AT, " +
                 "$ATTRIBUTION_LAST_OPEN_AT, " +
-                "$ATTRIBUTION_CONFIG, " +
                 "$ATTRIBUTION_REDOWNLOAD " +
                 ") VALUES (NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, " +
                 "NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, " +
-                "NULL, NULL, NULL, NULL, NULL)"
+                "NULL, NULL, NULL)"
         db.execSQL(insertInitialRowSQL)
     }
 
@@ -103,7 +96,7 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
         this.logger = logger
     }
 
-    override fun migrateFromStore(context: Context, writableDatabase: SQLiteDatabase): Boolean {
+    override fun migrateFromStore(writableDatabase: SQLiteDatabase): Boolean {
         var result = false
         if (Store.isMigratedToDB(context)) {
             return false
@@ -111,10 +104,10 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
 
         try {
             writableDatabase.beginTransaction()
-            val storedAttribution = AttributionEntity(writableDatabase)
+            val storedAttribution = queryFromDatabase(writableDatabase)
 
             if (!storedAttribution.isMigrated()) {
-                migrateVersionFromInt(context)
+                migrateVersionFromInt()
                 val sharedPreferenceData = AttributionEntity(Store.getAllData(context))
 
                 val mergedAttributionEntity = mergeEntity(sharedPreferenceData, storedAttribution)
@@ -141,19 +134,12 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
         return result
     }
 
-    override fun setAttributionFinished(
-        writableDatabase: SQLiteDatabase,
-        context: Context,
-        response: AttributionResponse,
-        testGroup: Int?,
-        sdkConfig: String?,
-    ) {
+    override fun setAttributionFinished(writableDatabase: SQLiteDatabase, response: AttributionResponse) {
         val now = System.currentTimeMillis()
         try {
             writableDatabase.beginTransaction()
-            val storedAttribution = AttributionEntity(writableDatabase)
+            val storedAttribution = queryFromDatabase(writableDatabase)
             val firstAttributedAt = storedAttribution.firstAttributionAt ?: now
-            val sdkConfigString = sdkConfig ?: ""
 
             val contentValues = AttributionEntity(
                 isCreateFinished = VALUE_INTEGER_TRUE,
@@ -161,11 +147,11 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
                 userId = response.getUserId().toString(),
                 installId = response.getInstallId(),
                 userType = response.getUserType(),
-                campaignId = response.getCampaign().id,
+                campaignExternalId = response.getCampaign().id,
                 campaignName = response.getCampaign().name,
                 campaignType = response.getCampaign().type,
                 isCampaignOrganic = response.getCampaign().isOrganic.toInt(),
-                type = response.getType(),
+                type = null,
                 channelId = response.getChannel().id,
                 channelName = response.getChannel().name,
                 channelIncent = response.getChannel().isIncent.toInt(),
@@ -175,8 +161,6 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
                 firstAttributionAt = firstAttributedAt,
                 lastAttributionAt = now,
                 lastOpenAt = now,
-                testGroup = testGroup ?: VALUE_NO_TEST_GROUP,
-                sdkConfig = sdkConfigString,
                 redownload = response.getRedownload().toInt(),
                 sourceId = response.getSourceId(),
                 sourceBundleId = response.getSourceBundleId(),
@@ -205,7 +189,7 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
 
     override fun getAttributionTimestamps(readableDatabase: SQLiteDatabase): AttributionTimestamps? {
         try {
-            val storedAttribution = AttributionEntity(readableDatabase)
+            val storedAttribution = queryFromDatabase(readableDatabase)
             val firstAttributedAt = storedAttribution.firstAttributionAt ?: -1
             val lastAttributedAt = storedAttribution.lastAttributionAt ?: firstAttributedAt
             val lastOpenAt = storedAttribution.lastOpenAt ?: lastAttributedAt
@@ -224,136 +208,66 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
         return null
     }
 
-    override fun getStoredOutput(context: Context, readableDatabase: SQLiteDatabase): AttributionOutput? {
+    override fun getStoredOutput(readableDatabase: SQLiteDatabase): AttributionOutput? {
         try {
-            val storedData = AttributionEntity(readableDatabase)
+            val storedData = queryFromDatabase(readableDatabase)
 
             val userId: String = getUserId(readableDatabase) ?: ""
             val installId: String = getInstallId(readableDatabase) ?: ""
 
             val dataVersion = storedData.version ?: 0
+            val campaignExternalId = storedData.campaignExternalId
 
-            if (TextUtils.isNullOrEmpty(userId) || dataVersion != readableDatabase.version) {
-                return null
-            }
-
-            val userType: String = storedData.userType ?: ""
-            val campaignId: Int = storedData.campaignId ?: 0
-            val campaignName: String = storedData.campaignName ?: ""
-            val campaignType: String = storedData.campaignType ?: ""
-            val campaignOrganic: Boolean = storedData.isCampaignOrganic?.toBoolean() ?: false
-            val type: String = storedData.type ?: ""
-            val channelId: Int = storedData.channelId ?: 0
-            val channelName: String = storedData.channelName ?: ""
-            val channelIncent: Boolean = storedData.channelIncent?.toBoolean() ?: false
-            val partnerId: Int = storedData.partnerId ?: 0
-            val partnerName: String = storedData.partnerName ?: ""
-            val sourceId: String? = storedData.sourceId
-            val sourceBundleId: String? = storedData.sourceBundleId
-            val sourcePlacement: String? = storedData.sourcePlacement
-            val adsetId: String? = storedData.adsetId
-            val createdAt: Long = storedData.createdAt ?: System.currentTimeMillis()
-            val reDownload: Boolean = storedData.redownload?.toBoolean() ?: false
-            val sdkConfigString: String = storedData.sdkConfig ?: ""
-
-            val sdkConfig: DTOAttributionOutputSdkConfig? = try {
-                if (sdkConfigString.isEmpty()) {
-                    null
-                } else {
-                    DTOAttributionOutputSdkConfig(
-                        JSONObject(sdkConfigString),
-                    )
-                }
-            } catch (e: JSONException) {
+            return if (
+                TextUtils.isNullOrEmpty(userId) ||
+                dataVersion != readableDatabase.version ||
+                campaignExternalId == null
+            ) {
                 null
+            } else {
+                val userType: String = storedData.userType ?: ""
+                val campaignName: String = storedData.campaignName ?: ""
+                val campaignType: String = storedData.campaignType ?: ""
+                val campaignOrganic: Boolean = storedData.isCampaignOrganic?.toBoolean() ?: false
+                val channelId: Int = storedData.channelId ?: 0
+                val channelName: String = storedData.channelName ?: ""
+                val channelIncent: Boolean = storedData.channelIncent?.toBoolean() ?: false
+                val partnerId: Int = storedData.partnerId ?: 0
+                val partnerName: String = storedData.partnerName ?: ""
+                val sourceId: String? = storedData.sourceId
+                val sourceBundleId: String? = storedData.sourceBundleId
+                val sourcePlacement: String? = storedData.sourcePlacement
+                val adsetId: String? = storedData.adsetId
+                val createdAt: Long = storedData.createdAt ?: System.currentTimeMillis()
+                val reDownload: Boolean = storedData.redownload?.toBoolean() ?: false
+
+                val response: AttributionResponse = AttributionResponseImpl(
+                    UUID.fromString(userId),
+                    installId,
+                    userType,
+                    CampaignImpl(campaignExternalId, campaignName, campaignType, campaignOrganic),
+                    ChannelImpl(channelId, channelName, channelIncent),
+                    PartnerImpl(partnerId, partnerName),
+                    if (TextUtils.isNullOrEmpty(sourceId)) null else sourceId,
+                    if (TextUtils.isNullOrEmpty(sourceBundleId)) null else sourceBundleId,
+                    if (TextUtils.isNullOrEmpty(sourcePlacement)) null else sourcePlacement,
+                    if (TextUtils.isNullOrEmpty(adsetId)) null else adsetId,
+                    Date(createdAt),
+                    reDownload,
+                )
+
+                AttributionOutput(response, null, false)
             }
-
-            val response: AttributionResponse = AttributionResponseImpl(
-                UUID.fromString(userId),
-                installId,
-                userType,
-                CampaignImpl(campaignId, campaignName, campaignType, campaignOrganic),
-                type,
-                ChannelImpl(channelId, channelName, channelIncent),
-                PartnerImpl(partnerId, partnerName),
-                if (TextUtils.isNullOrEmpty(sourceId)) null else sourceId,
-                if (TextUtils.isNullOrEmpty(sourceBundleId)) null else sourceBundleId,
-                if (TextUtils.isNullOrEmpty(sourcePlacement)) null else sourcePlacement,
-                if (TextUtils.isNullOrEmpty(adsetId)) null else adsetId,
-                Date(createdAt),
-                reDownload,
-            )
-
-            var testGroup: Int? = storedData.testGroup ?: VALUE_NO_TEST_GROUP
-            if (testGroup == VALUE_NO_TEST_GROUP) {
-                testGroup = null
-            }
-
-            return AttributionOutput(response, null, testGroup, sdkConfig, false)
         } catch (exception: Exception) {
             logger.warn("Unable to invoke getStoredOutput", exception)
         }
         return null
     }
 
-    override fun setTestGroupId(writableDatabase: SQLiteDatabase, testGroupId: Int?) {
-        try {
-            writableDatabase.beginTransaction()
-            val contentValues = AttributionEntity(writableDatabase).copy(
-                testGroup = testGroupId ?: VALUE_NO_TEST_GROUP,
-            ).toContentValues()
-
-            writableDatabase.update(
-                ATTRIBUTION_TABLE_NAME,
-                contentValues,
-                null,
-                null,
-            )
-            writableDatabase.setTransactionSuccessful()
-        } catch (exception: Exception) {
-            logger.warn("Unable to invoke setTestGroupId", exception)
-        } finally {
-            endTransaction(writableDatabase)
-        }
-    }
-
-    override fun getTestGroupId(readableDatabase: SQLiteDatabase): TestGroupId? {
-        try {
-            val attributionEntity = AttributionEntity(readableDatabase)
-            return if (attributionEntity.testGroup == null) {
-                null
-            } else if (attributionEntity.testGroup == VALUE_NO_TEST_GROUP) {
-                TestGroupId(null)
-            } else {
-                TestGroupId(attributionEntity.testGroup)
-            }
-        } catch (exception: Exception) {
-            logger.warn("Unable to invoke getTestGroupId", exception)
-        }
-
-        return null
-    }
-
-    override fun getSdkConfig(readableDatabase: SQLiteDatabase): String? {
-        try {
-            val sdkConfig = AttributionEntity(readableDatabase).sdkConfig
-
-            return if (sdkConfig.isNullOrEmpty()) {
-                null
-            } else {
-                sdkConfig
-            }
-        } catch (exception: Exception) {
-            logger.warn("Unable to invoke sdkConfig", exception)
-        }
-
-        return null
-    }
-
     override fun setLastOpen(writableDatabase: SQLiteDatabase, currentMs: Long) {
         try {
             writableDatabase.beginTransaction()
-            val contentValues = AttributionEntity(writableDatabase).copy(
+            val contentValues = queryFromDatabase(writableDatabase).copy(
                 lastOpenAt = currentMs,
             ).toContentValues()
 
@@ -374,7 +288,7 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
     override fun getAppVersionUpdateInfo(writableDatabase: SQLiteDatabase, currentVersion: ApplicationVersion): AppVersionUpdateInfo {
         var result: AppVersionUpdateInfo? = null
         try {
-            val storedData = AttributionEntity(writableDatabase)
+            val storedData = queryFromDatabase(writableDatabase)
             val atInstallVersionName: String? = storedData.installAppVersion
             val atInstallVersionCode: String? = storedData.installAppVersionCode
             writableDatabase.beginTransaction()
@@ -424,7 +338,7 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
 
             writableDatabase.setTransactionSuccessful()
         } catch (exception: Exception) {
-            logger.warn("Unable to invoke getStoredSdkConfig", exception)
+            logger.warn("Unable to invoke getAppVersionUpdateInfo", exception)
         } finally {
             endTransaction(writableDatabase)
         }
@@ -438,7 +352,7 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
 
     override fun getInstallId(readableDatabase: SQLiteDatabase): String? {
         try {
-            val installId = AttributionEntity(readableDatabase).installId
+            val installId = queryFromDatabase(readableDatabase).installId
             return installId
         } catch (exception: Exception) {
             logger.warn("Unable to invoke getInstallId", exception)
@@ -451,7 +365,7 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
         var isSuccess = false
         try {
             writableDatabase.beginTransaction()
-            val contentValues = AttributionEntity(writableDatabase).copy(
+            val contentValues = queryFromDatabase(writableDatabase).copy(
                 installId = installId,
             ).toContentValues()
 
@@ -474,7 +388,7 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
 
     override fun getUserId(readableDatabase: SQLiteDatabase): String? {
         try {
-            val userId = AttributionEntity(readableDatabase).userId
+            val userId = queryFromDatabase(readableDatabase).userId
             return userId
         } catch (exception: Exception) {
             logger.warn("Unable to invoke getUserId", exception)
@@ -487,7 +401,7 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
         var isSuccess = false
         try {
             writableDatabase.beginTransaction()
-            val contentValues = AttributionEntity(writableDatabase).copy(
+            val contentValues = queryFromDatabase(writableDatabase).copy(
                 userId = userId,
             ).toContentValues()
 
@@ -508,10 +422,10 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
         return isSuccess
     }
 
-    override fun endTransaction(db: SQLiteDatabase) {
-        if (db.isOpen) {
+    override fun endTransaction(writableDatabase: SQLiteDatabase) {
+        if (writableDatabase.isOpen) {
             try {
-                db.endTransaction()
+                writableDatabase.endTransaction()
             } catch (error: Exception) {
                 logger.warn("Failed to close transaction", error)
             }
@@ -525,7 +439,7 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
             userId = mainEntity.userId ?: secondaryEntity.userId,
             installId = mainEntity.installId ?: secondaryEntity.installId,
             userType = mainEntity.userType ?: secondaryEntity.userType,
-            campaignId = mainEntity.campaignId ?: secondaryEntity.campaignId,
+            campaignExternalId = mainEntity.campaignExternalId ?: secondaryEntity.campaignExternalId,
             campaignName = mainEntity.campaignName ?: secondaryEntity.campaignName,
             campaignType = mainEntity.campaignType ?: secondaryEntity.campaignType,
             isCampaignOrganic = mainEntity.isCampaignOrganic ?: secondaryEntity.isCampaignOrganic,
@@ -544,11 +458,9 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
             installAppVersionCode = mainEntity.installAppVersionCode ?: secondaryEntity.installAppVersionCode,
             lastAppVersion = mainEntity.lastAppVersion ?: secondaryEntity.lastAppVersion,
             lastAppVersionCode = mainEntity.lastAppVersionCode ?: secondaryEntity.lastAppVersionCode,
-            testGroup = mainEntity.testGroup ?: secondaryEntity.testGroup,
             firstAttributionAt = mainEntity.firstAttributionAt ?: secondaryEntity.firstAttributionAt,
             lastAttributionAt = mainEntity.lastAttributionAt ?: secondaryEntity.lastAttributionAt,
             lastOpenAt = mainEntity.lastOpenAt ?: secondaryEntity.lastOpenAt,
-            sdkConfig = mainEntity.sdkConfig ?: secondaryEntity.sdkConfig,
             redownload = mainEntity.redownload ?: secondaryEntity.redownload,
             isIntegrityTokenSent = mainEntity.isIntegrityTokenSent ?: secondaryEntity.isIntegrityTokenSent,
             integritySecret = mainEntity.integritySecret ?: secondaryEntity.integritySecret,
@@ -559,7 +471,7 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
     override fun setIntegritySecret(writableDatabase: SQLiteDatabase, secret: String) {
         try {
             writableDatabase.beginTransaction()
-            val contentValues = AttributionEntity(writableDatabase).copy(
+            val contentValues = queryFromDatabase(writableDatabase).copy(
                 integritySecret = secret,
             ).toContentValues()
 
@@ -579,20 +491,62 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
 
     @VisibleForTesting
     override fun getAllAttribution(readableDatabase: SQLiteDatabase): AttributionEntity {
-        return AttributionEntity(readableDatabase)
+        return queryFromDatabase(readableDatabase)
     }
 
     /***
      * SDK version before 4.6.0 are using application version as Integer instead of String.
      */
-    private fun migrateVersionFromInt(context: Context) {
+    private fun migrateVersionFromInt() {
         Store.migrateVersionIntToString(context)
+    }
+
+    override fun migrateAttributionToV8(writableDatabase: SQLiteDatabase) {
+        try {
+            writableDatabase.beginTransaction()
+            val storedData = queryFromDatabase(writableDatabase)
+            val migratedData = storedData.copy(
+                isCreateFinished = null,
+                version = null,
+                userType = null,
+                campaignExternalId = null,
+                campaignName = null,
+                campaignType = null,
+                isCampaignOrganic = null,
+                type = null,
+                channelId = null,
+                channelName = null,
+                channelIncent = null,
+                partnerId = null,
+                partnerName = null,
+                sourceId = null,
+                sourceBundleId = null,
+                sourcePlacement = null,
+                adsetId = null,
+                createdAt = null,
+                redownload = null,
+            )
+
+            writableDatabase.execSQL("DROP TABLE $ATTRIBUTION_TABLE_NAME")
+            createTable(writableDatabase)
+            writableDatabase.update(
+                ATTRIBUTION_TABLE_NAME,
+                migratedData.toContentValues(),
+                null,
+                null,
+            )
+            writableDatabase.setTransactionSuccessful()
+        } catch (exception: Exception) {
+            logger.warn("Unable to migrate attribution to v8 ${exception.message}", exception)
+        } finally {
+            endTransaction(writableDatabase)
+        }
     }
 
     override fun dropFieldOperation(writableDatabase: SQLiteDatabase) {
         try {
             writableDatabase.beginTransaction()
-            val storedData = AttributionEntity(writableDatabase)
+            val storedData = queryFromDatabase(writableDatabase)
 
             writableDatabase.execSQL("DROP TABLE $ATTRIBUTION_TABLE_NAME")
             createTable(writableDatabase)
@@ -610,6 +564,24 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
         }
     }
 
+    private fun queryFromDatabase(database: SQLiteDatabase): AttributionEntity {
+        database.query(
+            ATTRIBUTION_TABLE_NAME,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+        ).use { cursor ->
+            if (cursor.moveToFirst()) {
+                return AttributionEntity(cursor)
+            } else {
+                return AttributionEntity()
+            }
+        }
+    }
+
     companion object {
         @JvmStatic internal val ATTRIBUTION_IS_CREATE_FINISHED = "is_create_finished"
 
@@ -621,7 +593,7 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
 
         @JvmStatic internal val ATTRIBUTION_USER_TYPE = "user_type"
 
-        @JvmStatic internal val ATTRIBUTION_CAMPAIGN_ID = "campaign_id"
+        @JvmStatic internal val ATTRIBUTION_CAMPAIGN_EXTERNAL_ID = "campaign_external_id"
 
         @JvmStatic internal val ATTRIBUTION_CAMPAIGN_NAME = "campaign_name"
 
@@ -659,15 +631,11 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
 
         @JvmStatic internal val ATTRIBUTION_LAST_APP_VERSION_CODE = "last_app_version_code"
 
-        @JvmStatic internal val ATTRIBUTION_TEST_GROUP = "test_group"
-
         @JvmStatic internal val ATTRIBUTION_FIRST_ATTRIBUTION_AT = "first_attribution_at"
 
         @JvmStatic internal val ATTRIBUTION_LAST_ATTRIBUTION_AT = "last_attribution_at"
 
         @JvmStatic internal val ATTRIBUTION_LAST_OPEN_AT = "last_open_at"
-
-        @JvmStatic internal val ATTRIBUTION_CONFIG = "sdk_config"
 
         @JvmStatic internal val ATTRIBUTION_REDOWNLOAD = "redownload"
 
@@ -675,7 +643,6 @@ internal open class AttributionDAOImpl internal constructor(consoleLogger: Logge
 
         @JvmStatic internal val ATTRIBUTION_INTEGRITY_SECRET = "integritySecret"
 
-        private const val VALUE_NO_TEST_GROUP = -1
         private const val VALUE_INTEGER_TRUE = 1
     }
 }

@@ -1,6 +1,7 @@
 package io.justtrack
 
 import androidx.annotation.VisibleForTesting
+import io.justtrack.executor.TaskExecutor
 import io.justtrack.sdk.integrity.Integrity
 import java.util.UUID
 import java.util.concurrent.Future
@@ -27,9 +28,7 @@ internal class IntegritySecretProvider internal constructor(
         val currentIntegritySecret = integritySecret
 
         return if (currentIntegritySecret == null) {
-            val result = taskExecutor.executeAsFuture(
-                getIntegritySecret(installInstanceIdFuture),
-            )
+            val result = taskExecutor.executeFuture(getIntegritySecret(installInstanceIdFuture))
             integritySecret = result
             result
         } else {

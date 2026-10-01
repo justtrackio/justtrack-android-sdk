@@ -13,7 +13,7 @@ internal open class EventRepositoryImpl(
         databaseInterface.close()
     }
 
-    override suspend fun storeEntity(data: PublishingEvent): Pair<Long, Long>? {
+    override suspend fun storeEntity(data: StorableEvent): Pair<Long, Long>? {
         return databaseInterface.insertEvent(
             UserEventEntity(
                 data,
@@ -22,7 +22,7 @@ internal open class EventRepositoryImpl(
         )
     }
 
-    override suspend fun storeEntities(dataList: List<PublishingEvent>) {
+    override suspend fun storeEntities(dataList: List<StorableEvent>) {
         databaseInterface.insertEvents(
             dataList.map {
                 UserEventEntity(
@@ -37,19 +37,19 @@ internal open class EventRepositoryImpl(
         // DO NOT REMOVE EVENT BY DATE
     }
 
-    override suspend fun fetchNextBatchAndMark(batchSize: Int): List<PublishingEvent> {
+    override suspend fun fetchNextBatchAndMark(batchSize: Int): List<StorableEvent> {
         return databaseInterface.getNextBatchAndMarkTransactionEvent(batchSize).map {
             it.transform(formatter, logger, platformType)
         }
     }
 
-    override suspend fun getAll(): List<PublishingEvent> {
+    override suspend fun getAll(): List<StorableEvent> {
         return databaseInterface.getAllEvent().map {
             it.transform(formatter, logger, platformType)
         }
     }
 
-    override suspend fun deleteEntities(dataList: List<PublishingEvent>) {
+    override suspend fun deleteEntities(dataList: List<StorableEvent>) {
         if (dataList.isNotEmpty()) {
             databaseInterface.deleteByIdEvent(dataList.map { it.id })
         }
@@ -64,7 +64,7 @@ internal open class EventRepositoryImpl(
     }
 
     @VisibleForTesting
-    override suspend fun getAllUnMark(): List<PublishingEvent> {
+    override suspend fun getAllUnMark(): List<StorableEvent> {
         return databaseInterface.getAllUnMarkEvent().map { it.transform(formatter, logger, platformType) }
     }
 }

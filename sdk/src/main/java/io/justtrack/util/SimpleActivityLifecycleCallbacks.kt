@@ -7,6 +7,7 @@ import android.os.Bundle
 /**
  * This class is intended for internal use.
  */
+@ExcludeFromJacocoGeneratedReport
 abstract class SimpleActivityLifecycleCallbacks : ActivityLifecycleCallbacks {
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
 

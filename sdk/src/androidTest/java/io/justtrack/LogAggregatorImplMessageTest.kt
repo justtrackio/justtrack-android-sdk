@@ -3,8 +3,9 @@ package io.justtrack
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import io.justtrack.LogAggregator.LogSender
 import io.justtrack.database.Database
+import io.justtrack.dtos.DTOLogMessage
+import io.justtrack.dtos.LogLevel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -17,14 +18,6 @@ import org.junit.Assert
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.mockito.ArgumentMatchers.anyList
-import org.mockito.Mockito.mock
-import org.mockito.Mockito.times
-import org.mockito.Mockito.validateMockitoUsage
-import org.mockito.Mockito.verify
-import org.mockito.Mockito.`when`
-import org.mockito.kotlin.argumentCaptor
-import org.mockito.kotlin.whenever
 import java.util.Calendar
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -51,7 +44,6 @@ class LogAggregatorImplMessageTest {
     @After
     fun closeDb() {
         logAgg.close()
-        validateMockitoUsage()
     }
 
     @Test
@@ -102,10 +94,8 @@ class LogAggregatorImplMessageTest {
     fun testNoDuplicateSent() = runBlocking {
         db.openMessages().use { db ->
             val repo = MessageRepositoryImpl(Formatter, db, LoggerImpl())
-            val logSender = mock(LogSender::class.java)
+            val logSender = CapturingLogSender()
             val amount = 200
-            `when`(logSender.sendLogsAndMetrics(anyList(), anyList()))
-                .then { Result.success(Unit) }
             CoroutineScope(Dispatchers.Default).launch {
                 logAgg.addLogMessagesSuspend(populateList(amount))
             }.join()
@@ -122,8 +112,7 @@ class LogAggregatorImplMessageTest {
                 async { logAgg.sendLogsAndMetricsSuspend(logSender) },
             )
 
-            verify(logSender, times(2)).sendLogsAndMetrics(anyList(), anyList())
-
+            Assert.assertEquals(2, logSender.sendCount.get())
             Assert.assertEquals(0, repo.getAllUnMark().size)
         }
     }
@@ -133,15 +122,7 @@ class LogAggregatorImplMessageTest {
     fun testConcurrently() = runBlocking {
         db.openMessages().use { db ->
             val repo = MessageRepositoryImpl(Formatter, db, LoggerImpl())
-            val logSender = mock(LogSender::class.java)
-            val amountSentCaptor = argumentCaptor<List<DTOLogMessage>>()
-            whenever(
-                logSender.sendLogsAndMetrics(
-                    amountSentCaptor.capture(),
-                    anyList(),
-                ),
-            )
-                .then { Result.success(Unit) }
+            val logSender = CapturingLogSender()
 
             val firstInsertAmount = 100
             val secondInsertAmount = 200
@@ -158,8 +139,8 @@ class LogAggregatorImplMessageTest {
 
             Assert.assertEquals(0, repo.getAllUnMark().size)
             var totalSent = 0
-            for (index in 0 until amountSentCaptor.allValues.size) {
-                totalSent += amountSentCaptor.allValues[index].size
+            for (index in 0 until logSender.sentMessages.size) {
+                totalSent += logSender.sentMessages[index].size
             }
             Assert.assertEquals(
                 firstInsertAmount + secondInsertAmount + thirdInsertAmount,

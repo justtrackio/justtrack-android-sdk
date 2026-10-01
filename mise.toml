@@ -1,2 +1,20 @@
 [tools]
 pre-commit = "4.2.0"
+
+
+[tasks.codegraph]
+description = "Initialize or sync codegraph index"
+run = """
+  command -v codegraph >/dev/null 2>&1 || exit 0
+  if [ ! -f .codegraph/codegraph.db ]; then
+    codegraph init
+  fi
+  codegraph sync
+"""
+
+[tasks.worktree-setup]
+description = "Set up worktree (codegraph sync)"
+depends = ["codegraph"]
+
+[hooks]
+enter = { task = "codegraph" }

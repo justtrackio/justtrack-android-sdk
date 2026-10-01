@@ -3,7 +3,6 @@ package io.justtrack.integrations.unityads
 import android.content.Context
 import com.unity3d.services.core.properties.ClientProperties
 import io.justtrack.JustTrackSdk
-import io.justtrack.ProxyUtils
 import io.justtrack.ads.AdImpression
 import io.justtrack.ads.AdImpressionState
 import io.justtrack.integrations.IntegrationAdapter

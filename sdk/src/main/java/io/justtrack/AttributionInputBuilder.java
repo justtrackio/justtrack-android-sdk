@@ -5,6 +5,15 @@ import androidx.annotation.Nullable;
 
 import java.util.Date;
 
+import io.justtrack.dtos.DTOAppVersion;
+import io.justtrack.dtos.DTOAttributionInput;
+import io.justtrack.dtos.DTOAttributionInputDevice;
+import io.justtrack.dtos.DTOAttributionInputDeviceDisplay;
+import io.justtrack.dtos.DTOAttributionInputDeviceOS;
+import io.justtrack.dtos.DTOAttributionInputParameters;
+import io.justtrack.dtos.DTOAttributionInputReferrer;
+import io.justtrack.dtos.DTOAttributionInputUser;
+import io.justtrack.dtos.DTOSdkVersion;
 import io.justtrack.installreferrer.api.ReferrerDetails;
 import io.justtrack.versions.SdkVersion;
 import io.justtrack.versions.VersionBundle;
@@ -88,7 +97,7 @@ class AttributionInputBuilder {
 
     @NonNull
     DTOAttributionInput build() {
-        DTOAttributionInputParameters parameters = new DTOAttributionInputParameters(null, installSource, null, integritySecret);
+        DTOAttributionInputParameters parameters = new DTOAttributionInputParameters(installSource, integritySecret);
         SdkVersion sdkVersion = versionBundle.getSdkVersion();
         return new DTOAttributionInput(
                 new DTOAppVersion(versionBundle.getApplicationVersion().getVersionName(), versionBundle.getApplicationVersion().getVersionCode()),

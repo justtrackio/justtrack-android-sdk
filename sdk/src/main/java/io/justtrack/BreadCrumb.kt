@@ -1,14 +1,15 @@
 package io.justtrack
 
+import io.justtrack.dtos.LogLevel
 import org.json.JSONException
 import org.json.JSONObject
 import java.util.Date
 
-internal class BreadCrumb(
-    internal val message: String,
-    internal val category: String,
-    internal val level: LogLevel,
-    internal val timeStamp: Date,
+internal data class BreadCrumb(
+    val message: String,
+    val category: String,
+    val level: LogLevel,
+    val timeStamp: Date,
 ) : JSONEncodable {
 
     @Throws(JSONException::class)
@@ -19,16 +20,5 @@ internal class BreadCrumb(
         obj.put("level", level)
         obj.put("timestamp", formatter.formatDateMilliseconds(timeStamp))
         return obj
-    }
-
-    override fun toString(): String {
-        return (
-            "BreadCrumb{" +
-                "message='" + message + '\'' +
-                ", category='" + category + '\'' +
-                ", level=" + level +
-                ", timeStamp=" + timeStamp +
-                '}'
-            )
     }
 }

@@ -1,6 +1,5 @@
 package io.justtrack.database
 
-import android.content.Context
 import io.justtrack.AppVersionUpdateInfo
 import io.justtrack.ApplicationVersion
 import io.justtrack.AttributionOutput
@@ -8,7 +7,6 @@ import io.justtrack.AttributionResponse
 import io.justtrack.AttributionTimestamps
 import io.justtrack.LogMessageEntity
 import io.justtrack.LogMetricEntity
-import io.justtrack.TestGroupIdReaderTask
 import io.justtrack.UserEventEntity
 import kotlinx.coroutines.channels.SendChannel
 
@@ -134,15 +132,11 @@ internal sealed class DatabaseOperation {
     ) : DatabaseOperation()
 
     data class SetAttributionFinished(
-        val context: Context,
         val response: AttributionResponse,
-        val testGroup: Int?,
-        val sdkConfig: String?,
         val resultChannel: SendChannel<Boolean>,
     ) : DatabaseOperation()
 
     data class GetStoredOutput(
-        val context: Context,
         val resultChannel: SendChannel<AttributionOutput?>,
     ) : DatabaseOperation()
 
@@ -150,22 +144,9 @@ internal sealed class DatabaseOperation {
         val resultChannel: SendChannel<AttributionTimestamps?>,
     ) : DatabaseOperation()
 
-    data class SetTestGroupId(
-        val testGroupId: Int?,
-        val resultChannel: SendChannel<Boolean>,
-    ) : DatabaseOperation()
-
-    data class GetTestGroupId(
-        val resultChannel: SendChannel<TestGroupIdReaderTask.TestGroupId?>,
-    ) : DatabaseOperation()
-
     data class SetLastOpen(
         val resultChannel: SendChannel<Boolean>,
         val currentMs: Long,
-    ) : DatabaseOperation()
-
-    data class GetSdkConfig(
-        val resultChannel: SendChannel<String?>,
     ) : DatabaseOperation()
 
     data class GetAppVersionUpdateInfo(

@@ -1,5 +1,4 @@
 package io.justtrack
-
 import android.annotation.SuppressLint
 import android.content.Context
 import androidx.annotation.VisibleForTesting
@@ -10,24 +9,30 @@ import io.justtrack.crashes.NonNativeIssue
 import io.justtrack.crashes.ReportableIssue
 import io.justtrack.exceptions.ANRException
 import io.justtrack.log.Logger
+import io.justtrack.util.FileAccessor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import java.util.Date
 import java.util.concurrent.atomic.AtomicBoolean
 
 internal open class JtCrashReporter internal constructor(
-    val context: Context,
-    val logger: Logger,
-    val formatter: Formatter = Formatter,
-    val isTracking: AtomicBoolean,
+    context: Context,
+    private val fileAccessor: FileAccessor,
+    private val logger: Logger,
+    private val formatter: Formatter = Formatter,
+    private val isTracking: AtomicBoolean,
 ) : BreadCrumbReporter, CrashReporter {
 
     private val breadCrumbRingBuffer = RingBuffer<BreadCrumb>(MAX_BREADCRUMBS)
+
+    init {
+        context.getSharePrefWithIO(NAME, Context.MODE_PRIVATE) {
+            remove(KEY_UNCAUGHT_EXCEPTION_LIST)
+        }
+    }
 
     override fun captureException(throwable: Throwable) {
         val crashType = if (throwable is ANRException) {
@@ -36,12 +41,6 @@ internal open class JtCrashReporter internal constructor(
             CrashType.NORMAL_CRASH
         }
         storeUncaughtException(crashType.id, throwable.message, throwable.stackTrace, date = Date())
-    }
-
-    init {
-        context.getSharePrefWithIO(NAME, Context.MODE_PRIVATE) {
-            removeIO(KEY_UNCAUGHT_EXCEPTION_LIST)
-        }
     }
 
     override fun close() {
@@ -57,14 +56,15 @@ internal open class JtCrashReporter internal constructor(
     @SuppressLint("InlinedApi")
     @JvmName("report")
     internal fun report() = CoroutineScope(Dispatchers.IO).launch {
-        val fileList: List<String> = getCacheFileNames(context)
+        val fileList: List<String> = fileAccessor.listFileNames()
+            .filter { it.startsWith(STACKTRACE_FILE_PREFIX) || it.startsWith(CRASH_FILE_PREFIX) }
 
         for (crashFile in fileList) {
-            val crashData = loadFromCache(context, crashFile)
+            val crashData = loadFromCache(crashFile)
 
             crashData?.report(logger)
 
-            context.deleteFile(crashFile)
+            fileAccessor.deleteFile(crashFile)
         }
     }
 
@@ -85,25 +85,18 @@ internal open class JtCrashReporter internal constructor(
         try {
             val timeStamp = Formatter.formatDateMilliseconds(date)
 
-            writeCrashIntoFile(context, crashType, message, stacktrace, timeStamp, getBreadCrumbs())
+            writeCrashIntoFile(crashType, message, stacktrace, timeStamp, getBreadCrumbs())
         } catch (e: Exception) {
             logger.warn("Unable to store UncaughtException", e)
         }
     }
 
-    private fun writeCrashIntoFile(
-        context: Context,
-        crashType: Int,
-        message: String?,
-        stacktrace: String?,
-        timestamp: String,
-        breadCrumbs: List<BreadCrumb>,
-    ) {
+    private fun writeCrashIntoFile(crashType: Int, message: String?, stacktrace: String?, timestamp: String, breadCrumbs: List<BreadCrumb>) {
         val fileName = "$CRASH_FILE_PREFIX$timestamp.json"
-        val file = context.filesDir.resolve(fileName)
+        val file = fileAccessor.getFile(fileName)
 
         if (!file.exists()) {
-            file.createNewFile()
+            fileAccessor.createNewFile(file)
         }
 
         val data = JSONObject().apply {
@@ -120,31 +113,17 @@ internal open class JtCrashReporter internal constructor(
             put("breadcrumbs", breadcrumbs)
         }
 
-        file.writeText(root.toString())
+        fileAccessor.editFile(file, root.toString())
     }
 
     @VisibleForTesting
-    internal fun getCacheFileNames(context: Context): List<String> {
-        return context.filesDir.list { _, name ->
-            name.startsWith(STACKTRACE_FILE_PREFIX) || name.startsWith(CRASH_FILE_PREFIX)
-        }?.toList() ?: emptyList()
+    internal fun getCacheFileNames(): List<String> {
+        return fileAccessor.listFileNames()
+            .filter { it.startsWith(STACKTRACE_FILE_PREFIX) || it.startsWith(CRASH_FILE_PREFIX) }
     }
 
-    private fun loadFromCache(context: Context, fileName: String): ReportableIssue? {
-        val fileInputStream = context.openFileInput(fileName)
-        val inputStreamReader = InputStreamReader(fileInputStream)
-        val bufferedReader = BufferedReader(inputStreamReader)
-
-        val stringBuilder = StringBuilder()
-
-        bufferedReader.useLines { lines ->
-            lines.forEach { line ->
-                stringBuilder.append(line).append("\n")
-            }
-        }
-
-        val fileContent = stringBuilder.toString()
-        fileInputStream.close()
+    private fun loadFromCache(fileName: String): ReportableIssue? {
+        val fileContent = fileAccessor.loadFile(fileName)
 
         val crashData = try {
             val fileContentJson = JSONObject(fileContent)
@@ -165,7 +144,7 @@ internal open class JtCrashReporter internal constructor(
 
         // delete file if it is unreadable
         if (crashData == null) {
-            context.deleteFile(fileName)
+            fileAccessor.deleteFile(fileName)
         }
 
         return crashData

@@ -1,8 +1,5 @@
 package io.justtrack
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.util.concurrent.Callable
 import java.util.concurrent.ExecutionException
@@ -20,13 +17,6 @@ internal class TaskFuture<V> internal constructor(task: Task<V>) :
         },
     ),
     Future<V> {
-    @JvmName("execute")
-    internal fun execute() {
-        CoroutineScope(Dispatchers.IO).launch {
-            run()
-        }
-    }
-
     @Throws(ExecutionException::class, InterruptedException::class)
     override fun get(): V {
         checkNotMainThread()
@@ -43,6 +33,6 @@ internal class TaskFuture<V> internal constructor(task: Task<V>) :
         // Reading the Google Advertiser Id does not resolve if we block the main thread.
         // Therefore we forbid awaiting a future on the main thread because such a future could
         // be waiting for the main thread.
-        require(!ThreadUtils.isMainThread()) { "Must not be called on the main application thread" }
+        require(!ThreadUtils.isMainThread) { "Must not be called on the main application thread" }
     }
 }

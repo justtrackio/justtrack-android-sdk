@@ -5,8 +5,10 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.justtrack.crashes.CrashType
 import io.justtrack.crashes.NativeSignal
+import io.justtrack.dtos.LogLevel
 import io.justtrack.log.Logger
 import io.justtrack.log.LoggerFieldsBuilder
+import io.justtrack.util.FileAccessorImpl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -91,7 +93,8 @@ class JtCrashReporterTest {
             formatter.formatDateMilliseconds(date),
             generateNativeCrashMock(timeStamp = formatter.formatDateMilliseconds(date), formatter = formatter).toString(),
         )
-        val crashReporter = JtCrashReporter(context, logger, Formatter, AtomicBoolean(true))
+        val fileAccessor = FileAccessorImpl(context)
+        val crashReporter = JtCrashReporter(context, fileAccessor, logger, Formatter, AtomicBoolean(true))
         crashReporter.report().join()
 
         val dimensionCaptor = argumentCaptor<LoggerFieldsBuilder>()
@@ -134,7 +137,8 @@ class JtCrashReporterTest {
             formatter.formatDateMilliseconds(date),
             generateNativeCrashMock(timeStamp = formatter.formatDateMilliseconds(date), formatter = formatter, breadCrumbList = listOf()).toString(),
         )
-        val crashReporter = JtCrashReporter(context, logger, Formatter, AtomicBoolean(true))
+        val fileAccessor = FileAccessorImpl(context)
+        val crashReporter = JtCrashReporter(context, fileAccessor, logger, Formatter, AtomicBoolean(true))
         crashReporter.report().join()
 
         val dimensionCaptor = argumentCaptor<LoggerFieldsBuilder>()
@@ -203,8 +207,8 @@ class JtCrashReporterTest {
             formatter.formatDateMilliseconds(date),
             incompleteBreadCrumbJson,
         )
-
-        val crashReporter = JtCrashReporter(context, logger, Formatter, AtomicBoolean(true))
+        val fileAccessor = FileAccessorImpl(context)
+        val crashReporter = JtCrashReporter(context, fileAccessor, logger, Formatter, AtomicBoolean(true))
         crashReporter.report().join()
 
         val dimensionCaptor = argumentCaptor<LoggerFieldsBuilder>()
@@ -225,7 +229,8 @@ class JtCrashReporterTest {
             null,
             generateNativeCrashMock(timeStamp = null, formatter = formatter).toString(),
         )
-        val crashReporter = JtCrashReporter(context, logger, Formatter, AtomicBoolean(true))
+        val fileAccessor = FileAccessorImpl(context)
+        val crashReporter = JtCrashReporter(context, fileAccessor, logger, Formatter, AtomicBoolean(true))
         crashReporter.report().join()
 
         val dimensionCaptor = argumentCaptor<LoggerFieldsBuilder>()
@@ -240,7 +245,8 @@ class JtCrashReporterTest {
     @Test
     fun testReport_NoCrash() = runBlocking {
         val logger = mock<Logger>()
-        val crashReporter = JtCrashReporter(context, logger, Formatter, AtomicBoolean(true))
+        val fileAccessor = FileAccessorImpl(context)
+        val crashReporter = JtCrashReporter(context, fileAccessor, logger, Formatter, AtomicBoolean(true))
 
         crashReporter.report().join()
 
@@ -263,8 +269,8 @@ class JtCrashReporterTest {
             formatter.formatDateMilliseconds(nativeCrashDate),
             generateNativeCrashMock(timeStamp = formatter.formatDateMilliseconds(nativeCrashDate), formatter = formatter).toString(),
         )
-
-        val crashReporter = JtCrashReporter(context, logger, Formatter, AtomicBoolean(true))
+        val fileAccessor = FileAccessorImpl(context)
+        val crashReporter = JtCrashReporter(context, fileAccessor, logger, Formatter, AtomicBoolean(true))
         val throwable = Throwable("crash")
         throwable.stackTrace.plus(StackTraceElement("declareClass", "method", "file", 100))
 
@@ -289,7 +295,7 @@ class JtCrashReporterTest {
         Assert.assertEquals(CrashType.NORMAL_CRASH.toString(), dimensionCaptor.secondValue.fields["type"])
         Assert.assertEquals(formatter.formatDateMilliseconds(normalCrashDate.time), dimensionCaptor.secondValue.fields["timestamp"])
 
-        val storeError = crashReporter.getCacheFileNames(context)
+        val storeError = crashReporter.getCacheFileNames()
         Assert.assertEquals(0, storeError.size)
     }
 

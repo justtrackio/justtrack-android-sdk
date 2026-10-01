@@ -19,10 +19,12 @@ import java.util.concurrent.atomic.AtomicInteger
 internal open class DatabaseInterface
 @VisibleForTesting
 internal constructor(
+    val context: Context,
     consoleLogger: Logger,
     val database: Database,
 ) {
     internal constructor(context: Context, logger: Logger) : this(
+        context,
         logger,
         Database(context, logger),
     )
@@ -223,33 +225,16 @@ internal constructor(
                 return this@DatabaseInterface.getAttributionTimestamps()
             }
 
-            override suspend fun setAttributionFinished(
-                context: Context,
-                response: AttributionResponse,
-                testGroup: Int?,
-                sdkConfig: String?,
-            ): Boolean {
-                return this@DatabaseInterface.setAttributionFinished(context, response, testGroup, sdkConfig)
-            }
-
-            override suspend fun setTestGroupId(testGroupId: Int?): Boolean {
-                return this@DatabaseInterface.setTestGroupId(testGroupId)
-            }
-
-            override suspend fun getTestGroupId(): TestGroupIdReaderTask.TestGroupId? {
-                return this@DatabaseInterface.getTestGroupId()
+            override suspend fun setAttributionFinished(response: AttributionResponse): Boolean {
+                return this@DatabaseInterface.setAttributionFinished(response)
             }
 
             override suspend fun setLastOpen(currentMs: Long): Boolean {
                 return this@DatabaseInterface.setLastOpen(currentMs)
             }
 
-            override suspend fun getStoredOutput(context: Context): AttributionOutput? {
-                return this@DatabaseInterface.getStoredOutput(context)
-            }
-
-            override suspend fun getSdkConfig(): String? {
-                return this@DatabaseInterface.getSdkConfig()
+            override suspend fun getStoredOutput(): AttributionOutput? {
+                return this@DatabaseInterface.getStoredOutput()
             }
 
             override suspend fun getAppVersionUpdateInfo(currentApplicationVersion: ApplicationVersion): AppVersionUpdateInfo? {
@@ -522,41 +507,23 @@ internal constructor(
         DatabaseOperation.GetIntegritySecret(resultChannel = resultChannel)
     }
 
-    private suspend fun setAttributionFinished(context: Context, response: AttributionResponse, testGroup: Int?, sdkConfig: String?): Boolean =
-        addOperationWithResult(false) { resultChannel ->
-            DatabaseOperation.SetAttributionFinished(
-                context = context,
-                resultChannel = resultChannel,
-                response = response,
-                testGroup = testGroup,
-                sdkConfig = sdkConfig,
-            )
-        }
+    private suspend fun setAttributionFinished(response: AttributionResponse): Boolean = addOperationWithResult(false) { resultChannel ->
+        DatabaseOperation.SetAttributionFinished(
+            resultChannel = resultChannel,
+            response = response,
+        )
+    }
 
-    private suspend fun getStoredOutput(context: Context): AttributionOutput? = addOperationWithResult(null as AttributionOutput?) { resultChannel ->
-        DatabaseOperation.GetStoredOutput(context = context, resultChannel = resultChannel)
+    private suspend fun getStoredOutput(): AttributionOutput? = addOperationWithResult(null as AttributionOutput?) { resultChannel ->
+        DatabaseOperation.GetStoredOutput(resultChannel = resultChannel)
     }
 
     private suspend fun getAttributionTimestamps(): AttributionTimestamps? = addOperationWithResult(null as AttributionTimestamps?) { resultChannel ->
         DatabaseOperation.GetAttributionTimestamps(resultChannel = resultChannel)
     }
 
-    private suspend fun getTestGroupId(): TestGroupIdReaderTask.TestGroupId? {
-        return addOperationWithResult(null as TestGroupIdReaderTask.TestGroupId?) { resultChannel ->
-            DatabaseOperation.GetTestGroupId(resultChannel = resultChannel)
-        }
-    }
-
-    private suspend fun setTestGroupId(testGroupId: Int?): Boolean = addOperationWithResult(false) { resultChannel ->
-        DatabaseOperation.SetTestGroupId(resultChannel = resultChannel, testGroupId = testGroupId)
-    }
-
     private suspend fun setLastOpen(currentMs: Long): Boolean = addOperationWithResult(false) { resultChannel ->
         DatabaseOperation.SetLastOpen(resultChannel = resultChannel, currentMs = currentMs)
-    }
-
-    private suspend fun getSdkConfig(): String? = addOperationWithResult(null as String?) { resultChannel ->
-        DatabaseOperation.GetSdkConfig(resultChannel = resultChannel)
     }
 
     private suspend fun getAppVersionUpdateInfo(currentApplicationVersion: ApplicationVersion): AppVersionUpdateInfo? =
@@ -734,12 +701,12 @@ internal constructor(
             }
 
             is DatabaseOperation.SetAttributionFinished -> {
-                setAttributionFinished(database, operation.context, operation.response, operation.testGroup, operation.sdkConfig)
+                setAttributionFinished(database, operation.response)
                 operation.resultChannel.send(true)
             }
 
             is DatabaseOperation.GetStoredOutput -> {
-                val result = getStoredOutput(database, operation.context)
+                val result = getStoredOutput(database)
                 operation.resultChannel.send(result)
             }
 
@@ -748,24 +715,9 @@ internal constructor(
                 operation.resultChannel.send(result)
             }
 
-            is DatabaseOperation.SetTestGroupId -> {
-                setTestGroupId(database, operation.testGroupId)
-                operation.resultChannel.send(true)
-            }
-
-            is DatabaseOperation.GetTestGroupId -> {
-                val result = getTestGroupId(database)
-                operation.resultChannel.send(result)
-            }
-
             is DatabaseOperation.SetLastOpen -> {
                 setLastOpen(database, operation.currentMs)
                 operation.resultChannel.send(true)
-            }
-
-            is DatabaseOperation.GetSdkConfig -> {
-                val result = getSdkConfig(database)
-                operation.resultChannel.send(result)
             }
 
             is DatabaseOperation.GetAppVersionUpdateInfo -> {
@@ -823,32 +775,20 @@ internal constructor(
         return database.getIntegritySecret()
     }
 
-    private fun setAttributionFinished(database: Database, context: Context, response: AttributionResponse, testGroup: Int?, sdkConfig: String?) {
-        database.setAttributionFinished(context, response, testGroup, sdkConfig)
+    private fun setAttributionFinished(database: Database, response: AttributionResponse) {
+        database.setAttributionFinished(response)
     }
 
     private fun getAttributionTimestamps(database: Database): AttributionTimestamps? {
         return database.getAttributionTimestamps()
     }
 
-    private fun getTestGroupId(database: Database): TestGroupIdReaderTask.TestGroupId? {
-        return database.getTestGroupId()
-    }
-
-    private fun setTestGroupId(database: Database, testGroupId: Int?) {
-        database.setTestGroupId(testGroupId)
-    }
-
-    private fun getStoredOutput(database: Database, context: Context): AttributionOutput? {
-        return database.getStoredOutput(context)
+    private fun getStoredOutput(database: Database): AttributionOutput? {
+        return database.getStoredOutput()
     }
 
     private fun setLastOpen(database: Database, currentMs: Long) {
         database.setLastOpen(currentMs)
-    }
-
-    private fun getSdkConfig(database: Database): String? {
-        return database.getSdkConfig()
     }
 
     private fun getAppVersionUpdateInfo(database: Database, currentApplicationVersion: ApplicationVersion): AppVersionUpdateInfo {

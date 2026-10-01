@@ -65,6 +65,21 @@ class DimensionTest {
     }
 
     @Test
+    fun testJtGlobal0() {
+        assertEquals("jt_global_0", Dimension.JT_GLOBAL_0.toString())
+    }
+
+    @Test
+    fun testJtGlobal1() {
+        assertEquals("jt_global_1", Dimension.JT_GLOBAL_1.toString())
+    }
+
+    @Test
+    fun testJtGlobal2() {
+        assertEquals("jt_global_2", Dimension.JT_GLOBAL_2.toString())
+    }
+
+    @Test
     fun testJtItemId() {
         assertEquals("jt_item_id", Dimension.JT_ITEM_ID.toString())
     }

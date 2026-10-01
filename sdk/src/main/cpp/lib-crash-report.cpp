@@ -238,7 +238,7 @@ static void setup_signal_handler() {
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_io_justtrack_crashes_CrashHandler_registerListener(JNIEnv *env, jobject, jstring packageName, jstring filePrefixName) {
+Java_io_justtrack_crashes_CrashReportNativeLoaderImpl_registerListener(JNIEnv *env, jobject, jstring packageName, jstring filePrefixName) {
     // Convert the jstring to a C string
     const char *packageNameStr = env->GetStringUTFChars(packageName, nullptr);
     const char *filePrefixNameCStr = env->GetStringUTFChars(filePrefixName, nullptr);

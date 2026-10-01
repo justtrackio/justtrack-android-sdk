@@ -1,7 +1,8 @@
 package io.justtrack
 
 import android.content.Context
-import io.justtrack.attribution.AdvertiserIdInfo
+import io.justtrack.executor.TaskExecutor
+import io.justtrack.providers.AdvertiserIdProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -22,19 +23,19 @@ internal class AttributionIdManager internal constructor(
 
     @JvmName("getOrCreateInstallId")
     internal fun getOrCreateInstallId(): AsyncFuture<String> {
-        return taskExecutor.executeAsFuture(getOrCreateStoredInstallId())
+        return taskExecutor.executeFuture(getOrCreateStoredInstallId())
     }
 
     @Synchronized
     @JvmName("getUserId")
-    fun getStoredUserId(): AsyncFuture<UUID?> = taskExecutor.executeAsFuture(StoredUserIdGetterTask(databaseInterface))
+    fun getStoredUserId(): AsyncFuture<UUID?> = taskExecutor.executeFuture(StoredUserIdGetterTask(databaseInterface))
 
     @JvmName("checkInstallIdChange")
-    fun checkInstallIdChange(newInstallId: String, userIdFuture: AsyncFuture<String>, advertiserIdInfoFuture: AsyncFuture<AdvertiserIdInfo>) {
+    fun checkInstallIdChange(newInstallId: String, userIdFuture: AsyncFuture<String>, advertiserIdProvider: AdvertiserIdProvider) {
         CoroutineScope(Dispatchers.IO).launch {
             if (newInstallId != cachedInstallId) {
                 cachedInstallId = newInstallId
-                onInstallIdChange(newInstallId, userIdFuture, advertiserIdInfoFuture)
+                onInstallIdChange(newInstallId, userIdFuture, advertiserIdProvider)
             }
         }
     }
@@ -64,7 +65,7 @@ internal class AttributionIdManager internal constructor(
         }
     }
 
-    internal fun onInstallIdChange(newInstallId: String, userIdFuture: AsyncFuture<String>, advertiserIdInfoFuture: AsyncFuture<AdvertiserIdInfo>) {
+    internal fun onInstallIdChange(newInstallId: String, userIdFuture: AsyncFuture<String>, advertiserIdProvider: AdvertiserIdProvider) {
         val customUserId = CustomUserIdStore.getInstance().getPendingWithNewInstallId(context, newInstallId)
         val firebaseId = FirebaseIdStore.getInstance().getPendingWithNewInstallId(context, newInstallId)
         if (customUserId != null) {
@@ -72,7 +73,7 @@ internal class AttributionIdManager internal constructor(
                 customUserId,
                 userIdFuture,
                 this,
-                advertiserIdInfoFuture,
+                advertiserIdProvider,
                 PersistentIdStore.REASON_INSTALL_ID_CHANGED,
             )
         }
@@ -82,7 +83,7 @@ internal class AttributionIdManager internal constructor(
                 this,
                 FirebaseIdManager.AttributionParams(
                     userIdFuture,
-                    advertiserIdInfoFuture,
+                    advertiserIdProvider,
                     firebaseId,
                 ),
                 PersistentIdStore.REASON_INSTALL_ID_CHANGED,

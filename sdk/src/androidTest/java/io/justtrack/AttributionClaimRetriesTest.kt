@@ -4,8 +4,8 @@ import android.app.Application
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
+import io.justtrack.api.DefaultAttributionApi
 import io.justtrack.database.Database
-import io.justtrack.log.Logger
 import io.justtrack.publicInterface.SdkTest
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.runBlocking
@@ -35,12 +35,13 @@ class AttributionClaimRetriesTest {
         val builder = JustTrackSdkBuilder((context.applicationContext as Application), SdkTest.API_TOKEN)
         builder.setAttributionRetryDelaySeconds(3)
 
-        val sdk = JustTrackSdkImpl.createForTesting(
+        val sdk = createForTesting(
             builder,
-            HttpClientWithClaimReport(requestBodyChannel),
             RetryConfig.DEFAULT_CONFIG,
             DelayClaimProvider(),
             null,
+            attributionApi = ClaimReportApis(requestBodyChannel),
+
         )
 
         val firstClaims = requestBodyChannel.receive()
@@ -61,9 +62,8 @@ class AttributionClaimRetriesTest {
 
         sdk.shutdown()
     }
-    internal class HttpClientWithClaimReport constructor(private val requestBodyChannel: Channel<JSONEncodable>) :
-        BaseTestHttpClient() {
-        override suspend fun sendAttributionRequest(logger: Logger, body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
+    internal class ClaimReportApis(private val requestBodyChannel: Channel<JSONEncodable>) : DefaultAttributionApi() {
+        override suspend fun sendAttributionRequest(body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
             requestBodyChannel.send(body)
             val response = JSONObject(AttributionTest.testAttribution.toString())
             response.getJSONObject("attribution").getJSONObject("campaign").put("organic", true)
@@ -74,7 +74,7 @@ class AttributionClaimRetriesTest {
     private class DelayClaimProvider : ClaimProvider {
         private var remainingDelay: Long = 5000
 
-        override fun refreshClaims(sdk: BaseJustTrackSdk) {
+        override fun refreshClaims() {
             // no need to refresh anything
         }
 

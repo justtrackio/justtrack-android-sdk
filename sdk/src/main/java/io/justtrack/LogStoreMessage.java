@@ -2,10 +2,7 @@ package io.justtrack;
 
 import androidx.annotation.NonNull;
 
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.text.ParseException;
+import io.justtrack.dtos.DTOLogMessage;
 
 class LogStoreMessage extends LogMessageDatum implements LogStoreDatum {
     private final long id;
@@ -17,11 +14,6 @@ class LogStoreMessage extends LogMessageDatum implements LogStoreDatum {
 
     LogStoreMessage(long id, @NonNull DTOLogMessage message) {
         super(message);
-        this.id = id;
-    }
-
-    LogStoreMessage(long id, @NonNull String encoded, @NonNull Formatter formatter) throws JSONException, ParseException {
-        super(new JSONObject(encoded), formatter);
         this.id = id;
     }
 

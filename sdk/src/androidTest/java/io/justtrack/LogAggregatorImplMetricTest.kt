@@ -3,6 +3,7 @@ package io.justtrack
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import io.justtrack.database.Database
+import io.justtrack.dtos.DTOLogMetric
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -14,13 +15,6 @@ import org.junit.After
 import org.junit.Assert
 import org.junit.Before
 import org.junit.Test
-import org.mockito.ArgumentMatchers.anyList
-import org.mockito.Mockito.mock
-import org.mockito.Mockito.times
-import org.mockito.Mockito.validateMockitoUsage
-import org.mockito.Mockito.verify
-import org.mockito.Mockito.`when`
-import org.mockito.kotlin.argumentCaptor
 import java.util.Calendar
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -46,7 +40,6 @@ class LogAggregatorImplMetricTest {
     @After
     fun closeDb() {
         logAgg.close()
-        validateMockitoUsage()
     }
 
     @Test
@@ -100,11 +93,8 @@ class LogAggregatorImplMetricTest {
     fun testNoDuplicateSent() = runBlocking {
         db.openMetrics().use { db ->
             val repo = MetricRepositoryImpl(Formatter, db, LoggerImpl())
-            val logSender = mock(LogAggregator.LogSender::class.java)
+            val logSender = CapturingLogSender()
             val amount = 200
-            argumentCaptor<Callback<Void>>()
-            `when`(logSender.sendLogsAndMetrics(anyList(), anyList()))
-                .then { Result.success(Unit) }
             CoroutineScope(Dispatchers.Default).launch {
                 logAgg.addLogMetricSuspend(populateList(amount))
             }.join()
@@ -121,9 +111,7 @@ class LogAggregatorImplMetricTest {
                 async { logAgg.sendLogsAndMetricsSuspend(logSender) },
             )
 
-            verify(logSender, times(2))
-                .sendLogsAndMetrics(anyList(), anyList())
-
+            Assert.assertEquals(2, logSender.sendCount.get())
             Assert.assertEquals(0, repo.getAllUnMark().size)
         }
     }
@@ -133,15 +121,7 @@ class LogAggregatorImplMetricTest {
     fun testConcurrently() = runBlocking {
         db.openMetrics().use { db ->
             val repo = MetricRepositoryImpl(Formatter, db, LoggerImpl())
-            val logSender = mock(LogAggregator.LogSender::class.java)
-            val amountSentCaptor = argumentCaptor<List<DTOLogMetric>>()
-            `when`(
-                logSender.sendLogsAndMetrics(
-                    anyList(),
-                    amountSentCaptor.capture(),
-                ),
-            )
-                .then { Result.success(Unit) }
+            val logSender = CapturingLogSender()
 
             val firstInsertAmount = 100
             val secondInsertAmount = 200
@@ -158,8 +138,8 @@ class LogAggregatorImplMetricTest {
 
             Assert.assertEquals(0, repo.getAllUnMark().size)
             var totalSent = 0
-            for (index in 0 until amountSentCaptor.allValues.size) {
-                totalSent += amountSentCaptor.allValues[index].size
+            for (index in 0 until logSender.sentMetrics.size) {
+                totalSent += logSender.sentMetrics[index].size
             }
             Assert.assertEquals(
                 firstInsertAmount + secondInsertAmount + thirdInsertAmount,

@@ -5,8 +5,16 @@ package io.justtrack
 import android.database.sqlite.SQLiteException
 import androidx.annotation.VisibleForTesting
 import androidx.annotation.VisibleForTesting.PRIVATE
-import io.justtrack.BaseJustTrackSdk.PublishEventsTaskRunner
+import io.justtrack.dtos.DTOAppEvent
+import io.justtrack.dtos.DTOAppEventDevice
+import io.justtrack.dtos.DTOAppEventDeviceOS
+import io.justtrack.dtos.DTOAppEventEvent
+import io.justtrack.dtos.DTOAppEventUser
+import io.justtrack.dtos.DTOAppVersion
+import io.justtrack.dtos.DTOSdkVersion
+import io.justtrack.events.Dimension
 import io.justtrack.events.JtSessionTrackingEvent
+import io.justtrack.events.PublishEventTaskExecutor
 import io.justtrack.exceptions.InvalidFieldException
 import io.justtrack.exceptions.SdkNotTrackingException
 import io.justtrack.log.Logger
@@ -33,15 +41,19 @@ import java.util.concurrent.BlockingQueue
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
 
+@Suppress("LongParameterList")
 internal class PublishEventsQueue(
-    private val publishEvents: PublishEventsTaskRunner,
+    private val publishEventExecutor: PublishEventTaskExecutor,
     private val logger: Logger,
     private val networkErrorLogger: NetworkErrorLogger,
     private val eventRepository: EventRepository,
     private val runDelayMS: Long = 5_000L,
     private val isTracking: AtomicBoolean,
-    private val sdkVersionInfo: SdkVersion,
-) : AutoCloseable {
+    private val sdkVersion: SdkVersion,
+    private val globalDimensionsRepo: GlobalDimensionsRepo,
+    private val enableConnectionTracking: Boolean = false,
+    private val connectivityProvider: ConnectivityProvider,
+) : AutoCloseable, EventTracker {
     @VisibleForTesting
     internal var maxBatchSize: Int = DEFAULT_BATCH_SIZE
 
@@ -54,7 +66,7 @@ internal class PublishEventsQueue(
 
     private val runningTasks = mutableListOf<Job>()
 
-    private val futureMap = HashMap<Long, Callback<PublishingEvent>>()
+    private val futureMap = HashMap<Long, Callback<StorableEvent>>()
     private val eventsInFlight = HashSet<UUID>()
 
     // Deadlock-Safety: this mutex used for eventsInFlight & futureMap access
@@ -135,7 +147,7 @@ internal class PublishEventsQueue(
     }
 
     private suspend fun rejectPendingFutures() {
-        val pendingFutures: List<Callback<PublishingEvent>>
+        val pendingFutures: List<Callback<StorableEvent>>
         // Deadlock-Safety: We only hold the lock to copy the map of remaining futures and clear it.
         // We specifically don't call the callbacks while holding the lock (as they could contain
         // arbitrary code).
@@ -185,7 +197,7 @@ internal class PublishEventsQueue(
                         }
                         eventChannel.send(
                             EventChannelMessage.EventMessage(
-                                PublishingEvent(
+                                StorableEvent(
                                     event.id,
                                     event.eventId,
                                     event.event,
@@ -218,7 +230,7 @@ internal class PublishEventsQueue(
                     if (resultPair != null) {
                         val storeId = resultPair.first
                         val sequenceNumber = resultPair.second
-                        event = PublishingEvent(storeId, event.eventId, event.event, sequenceNumber)
+                        event = StorableEvent(storeId, event.eventId, event.event, sequenceNumber)
                         // Deadlock-Safety: We only add an object to a map
                         mutex.withLock {
                             futureMap[storeId] = result
@@ -337,7 +349,7 @@ internal class PublishEventsQueue(
                     eventQueue.offer(EventQueueMessage.RescheduleMessages("got a success"))
                 }
                 deleteEvents(events)
-                val pendingCalls: ArrayList<Pair<Callback<PublishingEvent>, PublishingEvent>> =
+                val pendingCalls: ArrayList<Pair<Callback<StorableEvent>, StorableEvent>> =
                     ArrayList()
                 // Deadlock-Safety: We only extract all futures we have to call from the map, we call them
                 // in a later step as calling them can run arbitrary code.
@@ -376,53 +388,67 @@ internal class PublishEventsQueue(
         }
     }
 
-    @JvmName("publishEvent")
-    internal fun publishEvent(event: AppEvent, sessionManager: SessionManager): AsyncFuture<Void?> {
-        if (!isTracking.get()) {
-            return ErrorFuture(SdkNotTrackingException())
+    override fun track(event: AppEvent, sessionManager: SessionManager): AsyncFuture<Void?> {
+        return if (!isTracking.get()) {
+            ErrorFuture(SdkNotTrackingException())
+        } else {
+            if (enableConnectionTracking) {
+                val currentConnectionType = connectivityProvider.connectionType
+                val dimensionValue = if (currentConnectionType == ConnectionType.OFFLINE) "offline" else "online"
+                if (event.dimensions[Dimension.JT_CONNECTION_TYPE.toString()] == null) {
+                    event.dimensions[Dimension.JT_CONNECTION_TYPE.toString()] = dimensionValue
+                }
+            }
+
+            try {
+                event.validate()
+            } catch (exception: InvalidFieldException) {
+                logger.warn("Not publishing invalid app event", exception)
+
+                return ErrorFuture(exception)
+            }
+
+            // Inject global dimensions after validation so they don't count against maxDimensionSize.
+            // Only add if the event doesn't already have a value for that dimension (user-set takes precedence).
+            globalDimensionsRepo.getAll().forEach { (key, value) ->
+                if (event.dimensions[key] == null) {
+                    event.dimensions[key] = value
+                }
+            }
+
+            // If we have an open session (because the app didn't shut down properly / was killed), we will
+            // send an end event from the session manager constructor - before assigning the sessionManager
+            // variable in our constructor.
+            sessionManager.updateSessionTimeStamp()
+
+            val buildEvent = event.build(sessionManager.getLatestSessionId(), sdkVersion)
+            logger.debug("Received event $buildEvent")
+            publishEvent(buildEvent)
         }
-
-        try {
-            event.validate()
-        } catch (exception: InvalidFieldException) {
-            logger.warn("Not publishing invalid app event", exception)
-
-            return ErrorFuture(exception)
-        }
-
-        // If we have an open session (because the app didn't shut down properly / was killed), we will
-        // send an end event from the session manager constructor - before assigning the sessionManager
-        // variable in our constructor.
-        sessionManager.updateSessionTimeStamp()
-
-        val buildEvent = event.build(sessionManager.getLatestSessionId(), sdkVersionInfo)
-
-        return publishEvent(buildEvent)
     }
 
     @VisibleForTesting(otherwise = PRIVATE)
-    @JvmName("publishEvent")
-    internal fun publishEvent(event: PublishableAppEvent): AsyncFuture<Void?> {
+    fun publishEvent(event: PublishableAppEvent): AsyncFuture<Void?> {
         if (done.get()) {
             return ErrorFuture(IllegalStateException("queue has been shut down"))
         }
 
-        val result = ResolvableFuture<PublishingEvent>()
-        val publishingEvent = PublishingEvent(
+        val result = ResolvableFuture<StorableEvent>()
+        val publishingEvent = StorableEvent(
             eventId = UUID.randomUUID(),
             event = event,
         )
 
-        if (!eventQueue.offer(EventQueueMessage.PublishMessage(publishingEvent, result))) {
-            return ErrorFuture(IllegalStateException("too many events in publishing queue, slow down publishing events"))
+        return if (!eventQueue.offer(EventQueueMessage.PublishMessage(publishingEvent, result))) {
+            ErrorFuture(IllegalStateException("too many events in publishing queue, slow down publishing events"))
+        } else {
+            TransformingFuture(
+                result,
+            ) { null }
         }
-
-        return TransformingFuture(
-            result,
-        ) { null }
     }
 
-    private suspend fun storeEvent(data: PublishingEvent): Pair<Long, Long>? {
+    private suspend fun storeEvent(data: StorableEvent): Pair<Long, Long>? {
         return try {
             eventRepository.storeEntity(data)
         } catch (e: Exception) {
@@ -455,16 +481,16 @@ internal class PublishEventsQueue(
         }
     }
 
-    private suspend fun publishEventsInBatch(batch: List<StorableEvent>, sdkVersion: SdkVersion): Result<List<PublishingEvent>>? {
+    private suspend fun publishEventsInBatch(batch: List<StorableEvent>, sdkVersion: SdkVersion): Result<List<StorableEvent>>? {
         if (batch.isEmpty()) {
             return null
         }
 
         return try {
             Result.success(
-                publishEvents.runPublishEventTask(
+                publishEventExecutor.runPublishEventTask(
                     batch.map {
-                        PublishingEvent(
+                        StorableEvent(
                             it.id,
                             it.eventId,
                             it.event,
@@ -495,7 +521,7 @@ internal class PublishEventsQueue(
         }
     }
 
-    private suspend fun deleteEvents(idList: List<PublishingEvent>) {
+    private suspend fun deleteEvents(idList: List<StorableEvent>) {
         try {
             eventRepository.deleteEntities(idList)
         } catch (e: Exception) {
@@ -535,7 +561,7 @@ internal class PublishEventsQueue(
         @JvmStatic
         @JvmName("build")
         internal fun build(
-            events: Iterable<PublishingEvent>,
+            events: Iterable<StorableEvent>,
             deviceInfo: DeviceInfo,
             attributionParams: DTOBuildAttributionParams,
             sdkVersion: SdkVersion,
@@ -603,8 +629,8 @@ internal sealed class EventQueueMessage {
     ) : EventQueueMessage()
 
     data class PublishMessage(
-        val event: PublishingEvent,
-        val result: Callback<PublishingEvent>,
+        val event: StorableEvent,
+        val result: Callback<StorableEvent>,
     ) : EventQueueMessage()
 }
 
@@ -619,5 +645,5 @@ internal sealed class EventChannelMessage {
 
     data object TimeoutMessage : EventChannelMessage()
 
-    data class EventMessage(val event: PublishingEvent) : EventChannelMessage()
+    data class EventMessage(val event: StorableEvent) : EventChannelMessage()
 }

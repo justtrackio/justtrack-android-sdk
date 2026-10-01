@@ -4,6 +4,7 @@ import android.content.ContentProvider
 import android.content.ContentValues
 import android.database.Cursor
 import android.net.Uri
+import io.justtrack.util.ExcludeFromJacocoGeneratedReport
 
 /**
  * A [ContentProvider] declared in the SDK's manifest that auto-initializes the justtrack SDK
@@ -20,23 +21,18 @@ class InitializerContentProvider : ContentProvider() {
         return true
     }
 
-    override fun query(uri: Uri, strings: Array<String?>?, string: String?, strings1: Array<String?>?, s1: String?): Cursor? {
-        return null
-    }
+    @ExcludeFromJacocoGeneratedReport
+    override fun query(uri: Uri, strings: Array<String?>?, string: String?, strings1: Array<String?>?, s1: String?): Cursor? = null
 
-    override fun getType(uri: Uri): String? {
-        return null
-    }
+    @ExcludeFromJacocoGeneratedReport
+    override fun getType(uri: Uri): String? = null
 
-    override fun insert(uri: Uri, contentValues: ContentValues?): Uri? {
-        return null
-    }
+    @ExcludeFromJacocoGeneratedReport
+    override fun insert(uri: Uri, contentValues: ContentValues?): Uri? = null
 
-    override fun delete(uri: Uri, string: String?, strings: Array<String?>?): Int {
-        return 0
-    }
+    @ExcludeFromJacocoGeneratedReport
+    override fun delete(uri: Uri, string: String?, strings: Array<String?>?): Int = 0
 
-    override fun update(uri: Uri, contentValues: ContentValues?, string: String?, strings: Array<String?>?): Int {
-        return 0
-    }
+    @ExcludeFromJacocoGeneratedReport
+    override fun update(uri: Uri, contentValues: ContentValues?, string: String?, strings: Array<String?>?): Int = 0
 }

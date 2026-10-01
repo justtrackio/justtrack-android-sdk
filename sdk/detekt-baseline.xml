@@ -2,7 +2,7 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>CyclomaticComplexMethod:AttributionDAOImpl.kt$AttributionDAOImpl$override fun getStoredOutput(context: Context, readableDatabase: SQLiteDatabase): AttributionOutput?</ID>
+    <ID>CyclomaticComplexMethod:AttributionDAOImpl.kt$AttributionDAOImpl$override fun getStoredOutput(readableDatabase: SQLiteDatabase): AttributionOutput?</ID>
     <ID>CyclomaticComplexMethod:AttributionDAOImpl.kt$AttributionDAOImpl$override fun mergeEntity(mainEntity: AttributionEntity, secondaryEntity: AttributionEntity): AttributionEntity</ID>
     <ID>CyclomaticComplexMethod:DatabaseInterface.kt$DatabaseInterface$private suspend fun executeOperation(database: Database, operation: DatabaseOperation)</ID>
     <ID>CyclomaticComplexMethod:IntegrationManager.kt$IntegrationManager$fun integrateWithAdjoe()</ID>
@@ -12,16 +12,17 @@
     <ID>LargeClass:Database.kt$Database : SQLiteOpenHelper</ID>
     <ID>LongMethod:AttributionDAOImpl.kt$AttributionDAOImpl$override fun createTable(db: SQLiteDatabase)</ID>
     <ID>LongMethod:AttributionDAOImpl.kt$AttributionDAOImpl$override fun getAppVersionUpdateInfo(writableDatabase: SQLiteDatabase, currentVersion: ApplicationVersion): AppVersionUpdateInfo</ID>
-    <ID>LongMethod:AttributionDAOImpl.kt$AttributionDAOImpl$override fun getStoredOutput(context: Context, readableDatabase: SQLiteDatabase): AttributionOutput?</ID>
-    <ID>LongMethod:AttributionOutputProvider.kt$AttributionOutputProvider.&lt;no name provided>$override suspend fun execute(): AttributionOutput?</ID>
+    <ID>LongMethod:AttributionDAOImplUnitTest.kt$AttributionDAOImplUnitTest$@Test fun mergeEntity_prefersMainEntityValuesAndFallsBackToSecondaryEntity()</ID>
+    <ID>LongMethod:AttributionHandlerImpl.kt$AttributionHandlerImpl$override fun handleAttribution( attributionFuture: AsyncFuture&lt;AttributionOutput>, storedResponse: AttributionResponse?, attributionTimestamps: AttributionTimestamps?, forcedDecision: AttributionDecision?, attributionDecision: AttributionDecision, )</ID>
+    <ID>LongMethod:AttributionOutputProviderImpl.kt$AttributionOutputProviderImpl.&lt;no name provided>$override suspend fun execute(): AttributionOutput</ID>
     <ID>LongMethod:AttributionTask.kt$AttributionTask$@Throws(ParseAttributionException::class) private fun parseResponse(response: JSONObject?, claims: ProvidedClaims, userId: UUID): AttributionOutput</ID>
     <ID>LongMethod:AttributionTask.kt$AttributionTask$override suspend fun execute(): AttributionOutput</ID>
     <ID>LongMethod:BillingTracker.kt$BillingTracker.&lt;no name provided>$override fun invoke(proxy: Any?, method: Method?, args: Array&lt;out Any>?): Any?</ID>
     <ID>LongMethod:DatabaseInterface.kt$DatabaseInterface$private suspend fun executeOperation(database: Database, operation: DatabaseOperation)</ID>
+    <ID>LongMethod:InstallReferrerReader.kt$InstallReferrerReader.&lt;no name provided>$override suspend fun execute(): ReferrerDetails?</ID>
     <ID>LongMethod:IntegrationManager.kt$IntegrationManager$fun integrateWithAdjoe()</ID>
     <ID>LongMethod:PublishEventsQueue.kt$PublishEventsQueue$private suspend fun runQueue()</ID>
-    <ID>LongParameterList:PublishCustomUserIdTask.kt$PublishCustomUserIdTask$( private val context: Context, private val attributionIdManager: AttributionIdManager, private val logger: Logger, private val networkErrorLogger: NetworkErrorLogger, private val httpClient: HttpClient, private val customUserId: String, private val reason: String, private val userIdFuture: AsyncFuture&lt;String>, private val advertiserIdFuture: AsyncFuture&lt;AdvertiserIdInfo>, )</ID>
-    <ID>MagicNumber:TestGroupIdReaderTask.kt$TestGroupIdReaderTask$3</ID>
+    <ID>LongParameterList:DTOAppEventEvent.kt$DTOAppEventEvent$( val id: UUID, val name: String, val dimensions: JSONObject?, val value: Double, val unit: Unit?, val currency: String?, val sessionId: String, val happenedAt: Date, val sequenceNumber: Long, )</ID>
     <ID>NestedBlockDepth:BillingTracker.kt$BillingTracker$private fun reportTransaction(productType: ProductType, productDetails: List&lt;ProductDetail>, purchases: List&lt;ProductPurchase>)</ID>
     <ID>NestedBlockDepth:BillingTrackerFive.kt$BillingTrackerFive$@Throws(Exception::class) private fun buildProductQueryParams(productType: String, purchases: List&lt;ProductPurchase>): Any</ID>
     <ID>NestedBlockDepth:Database.kt$Database$internal fun getIntegritySecret(): String?</ID>
@@ -30,40 +31,34 @@
     <ID>NestedBlockDepth:PublishEventsQueue.kt$PublishEventsQueue$private suspend fun consumeEventChannel()</ID>
     <ID>NestedBlockDepth:PublishEventsQueue.kt$PublishEventsQueue$private suspend fun runQueue()</ID>
     <ID>NestedBlockDepth:ReportableIssue.kt$ReportableIssue$internal fun report(logger: Logger)</ID>
-    <ID>ReturnCount:AttributionDAOImpl.kt$AttributionDAOImpl$override fun getStoredOutput(context: Context, readableDatabase: SQLiteDatabase): AttributionOutput?</ID>
-    <ID>ReturnCount:AttributionOutputProvider.kt$AttributionOutputProvider.&lt;no name provided>$override suspend fun execute(): AttributionOutput?</ID>
+    <ID>ReturnCount:AttributionOutputProviderImpl.kt$AttributionOutputProviderImpl.&lt;no name provided>$override suspend fun execute(): AttributionOutput</ID>
     <ID>ReturnCount:BillingTracker.kt$BillingTracker$private suspend fun checkPurchaseHistory(purchaseToken: String): String?</ID>
     <ID>ReturnCount:BillingTracker.kt$BillingTracker.&lt;no name provided>$override fun invoke(proxy: Any?, method: Method?, args: Array&lt;out Any>?): Any?</ID>
     <ID>ReturnCount:BillingTrackerFive.kt$BillingTrackerFive.&lt;no name provided>$override fun invoke(proxy: Any?, method: Method?, args: Array&lt;out Any>?): Any?</ID>
     <ID>ReturnCount:DatabaseInterface.kt$DatabaseInterface$private fun deleteEvent(database: Database, idList: List&lt;Long>?, cutoffMS: Long?): Boolean</ID>
     <ID>ReturnCount:DatabaseInterface.kt$DatabaseInterface$private fun deleteMessage(database: Database, idList: List&lt;Long>?, cutoffMS: Long?): Boolean</ID>
     <ID>ReturnCount:DatabaseInterface.kt$DatabaseInterface$private fun deleteMetric(database: Database, idList: List&lt;Long>?, cutoffMS: Long?): Boolean</ID>
-    <ID>ReturnCount:DeviceInfoImpl.kt$DeviceInfoImpl$@RequiresApi(api = Build.VERSION_CODES.M) private fun getConnectionTypeApi23(manager: ConnectivityManager): ConnectionType</ID>
+    <ID>ReturnCount:DeviceInfoImpl.kt$DeviceInfoImpl$@VisibleForTesting @RequiresApi(api = Build.VERSION_CODES.M) internal fun getConnectionTypeApi23(manager: ConnectivityManager): ConnectionType</ID>
+    <ID>ReturnCount:DeviceInfoImpl.kt$DeviceInfoImpl$@VisibleForTesting internal fun getConnectionTypeApiAll(manager: ConnectivityManager): ConnectionType</ID>
     <ID>ReturnCount:DeviceInfoImpl.kt$DeviceInfoImpl$override fun getAppVersion(): ApplicationVersion</ID>
     <ID>ReturnCount:DeviceInfoImpl.kt$DeviceInfoImpl$override fun getConnectionType(): ConnectionType</ID>
-    <ID>ReturnCount:DeviceInfoImpl.kt$DeviceInfoImpl$private fun getConnectionTypeApiAll(manager: ConnectivityManager): ConnectionType</ID>
     <ID>ReturnCount:FetchClaimErrorClassifier.kt$FetchClaimErrorClassifier.Companion$@JvmStatic fun isUnreachableException(e: Throwable?): Boolean</ID>
-    <ID>ReturnCount:HttpLoggerImpl.kt$HttpLoggerImpl$private suspend fun sendToServer(messages: Collection&lt;DTOLogMessage>, metrics: Collection&lt;DTOLogMetric>): Result&lt;Unit></ID>
     <ID>ReturnCount:IntegrationManager.kt$IntegrationManager$fun integrateWithAdjoe()</ID>
     <ID>ReturnCount:IntegrityTokenProvider.kt$IntegrityTokenProvider$private fun isTokenOutDated(tokenFuture: AsyncFuture&lt;IntegrityTokenData>): Boolean</ID>
     <ID>ReturnCount:IntegrityTokenProvider.kt$IntegrityTokenProvider.IntegrityTokenGetterTask$@Throws(NoSuchAlgorithmException::class, RuntimeException::class) override suspend fun execute(): IntegrityTokenData</ID>
     <ID>ReturnCount:JustTrack.kt$JustTrack.Companion$private fun getAppStartDuration(): AppStartDuration?</ID>
     <ID>ReturnCount:PublishCustomUserIdTask.kt$PublishCustomUserIdTask$override suspend fun execute(): Boolean</ID>
-    <ID>ReturnCount:PublishEventsQueue.kt$PublishEventsQueue$@JvmName("publishEvent") internal fun publishEvent(event: AppEvent, sessionManager: SessionManager): AsyncFuture&lt;Void?></ID>
-    <ID>ReturnCount:PublishEventsQueue.kt$PublishEventsQueue$@VisibleForTesting(otherwise = PRIVATE) @JvmName("publishEvent") internal fun publishEvent(event: PublishableAppEvent): AsyncFuture&lt;Void?></ID>
     <ID>ReturnCount:PublishFirebaseAppInstanceIdTask.kt$PublishFirebaseAppInstanceIdTask$override suspend fun execute(): Boolean</ID>
     <ID>ReturnCount:RemoteConfigActivator.kt$RemoteConfigActivator$private fun updateStoredPendingStatus(experiments: List&lt;String>)</ID>
-    <ID>ReturnCount:SdkConfigTask.kt$SdkConfigTask.ApplyingConfigTask$@VisibleForTesting internal suspend fun fetchStoredSDKConfig(): DTOAttributionOutputSdkConfig?</ID>
     <ID>ReturnCount:Store.kt$Store$private fun getVersionAndMigrate(sharedPreferences: SharedPreferences, key: String, default: String?): String?</ID>
-    <ID>ReturnCount:TestGroupIdReaderTask.kt$TestGroupIdReaderTask$private fun createTestGroupId(advertiserId: String?): Int?</ID>
     <ID>ReturnCount:TrackingEventErrorClassifier.kt$TrackingEventErrorClassifier$override fun unrecoverable(exception: Throwable): Boolean</ID>
     <ID>SwallowedException:AsyncFutureImpl.kt$AsyncFutureImpl$e: TimeoutException</ID>
-    <ID>SwallowedException:AttributionDAOImpl.kt$AttributionDAOImpl$e: JSONException</ID>
+    <ID>SwallowedException:AttributionOutputProviderImplTest.kt$AttributionOutputProviderImplTest$exception: RejectedExecutionException</ID>
+    <ID>SwallowedException:BackgroundSenderTaskReceiver.kt$BackgroundSenderTaskReceiver$e: TimeoutCancellationException</ID>
     <ID>SwallowedException:BillingTrackerFactory.kt$BillingTrackerFactory$e: Exception</ID>
     <ID>SwallowedException:DeviceInfoImpl.kt$DeviceInfoImpl$exception: PackageManager.NameNotFoundException</ID>
     <ID>SwallowedException:DeviceInfoImpl.kt$DeviceInfoImpl$exception: RuntimeException</ID>
     <ID>SwallowedException:DeviceInfoImpl.kt$DeviceInfoImpl$exception: UnsupportedOperationException</ID>
-    <ID>SwallowedException:InstallReferrerReader.kt$InstallReferrerReader.&lt;no name provided>$exception: Exception</ID>
     <ID>SwallowedException:IntegrationManager.kt$IntegrationManager$exception: ClassNotFoundException</ID>
     <ID>SwallowedException:IntegrityTokenProvider.kt$IntegrityTokenProvider$exception: ExecutionException</ID>
     <ID>SwallowedException:IntegrityTokenProvider.kt$IntegrityTokenProvider$exception: TimeoutException</ID>
@@ -72,18 +67,23 @@
     <ID>SwallowedException:NonNativeIssue.kt$NonNativeIssue$e: Exception</ID>
     <ID>SwallowedException:PersistentIdStore.kt$PersistentIdStore.State$exception: IllegalArgumentException</ID>
     <ID>SwallowedException:TaskFutureTest.kt$TaskFutureTest$e: TimeoutException</ID>
+    <ID>SwallowedException:WorkerScheduler.kt$WorkerScheduler$exception: Exception</ID>
     <ID>ThrowsCount:AppEvent.kt$AppEvent$@Throws(InvalidFieldException::class) fun validate()</ID>
-    <ID>TooGenericExceptionCaught:AdvertiserIdReaderTask.kt$AdvertiserIdReaderTask$e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:AdvertiserIdProcessingTask.kt$AdvertiserIdProcessingTask$e: Throwable</ID>
     <ID>TooGenericExceptionCaught:AppSetIdReaderTask.kt$AppSetIdReaderTask$e: Throwable</ID>
     <ID>TooGenericExceptionCaught:AsyncFutureImpl.kt$AsyncFutureImpl$exception: Throwable</ID>
     <ID>TooGenericExceptionCaught:AttributionDAOImpl.kt$AttributionDAOImpl$error: Exception</ID>
     <ID>TooGenericExceptionCaught:AttributionDAOImpl.kt$AttributionDAOImpl$exception: Exception</ID>
-    <ID>TooGenericExceptionCaught:AttributionOutputProvider.kt$AttributionOutputProvider.&lt;no name provided>$exception: Exception</ID>
-    <ID>TooGenericExceptionCaught:AttributionOutputProvider.kt$AttributionOutputProvider.&lt;no name provided>$exception: Throwable</ID>
+    <ID>TooGenericExceptionCaught:AttributionHandlerImpl.kt$AttributionHandlerImpl$exception: Exception</ID>
+    <ID>TooGenericExceptionCaught:AttributionOutputProviderImpl.kt$AttributionOutputProviderImpl.&lt;no name provided>$exception: Exception</ID>
+    <ID>TooGenericExceptionCaught:AttributionOutputProviderImpl.kt$AttributionOutputProviderImpl.&lt;no name provided>$exception: Throwable</ID>
     <ID>TooGenericExceptionCaught:AttributionTask.kt$AttributionTask$e: Exception</ID>
     <ID>TooGenericExceptionCaught:AttributionTask.kt$AttributionTask$e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:BackgroundSenderTaskReceiver.kt$BackgroundSenderTaskReceiver$error: Exception</ID>
+    <ID>TooGenericExceptionCaught:BackgroundSenderTaskReceiver.kt$BackgroundSenderTaskReceiver$exception: Exception</ID>
     <ID>TooGenericExceptionCaught:BillingTracker.kt$BillingTracker$exception: Exception</ID>
     <ID>TooGenericExceptionCaught:BillingTrackerFactory.kt$BillingTrackerFactory$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:ClaimProviderImpl.kt$ClaimProviderImpl$exception: Exception</ID>
     <ID>TooGenericExceptionCaught:Database.kt$Database$e: Exception</ID>
     <ID>TooGenericExceptionCaught:Database.kt$Database$error: Exception</ID>
     <ID>TooGenericExceptionCaught:Database.kt$Database$exception: Exception</ID>
@@ -91,11 +91,9 @@
     <ID>TooGenericExceptionCaught:DeviceInfoImpl.kt$DeviceInfoImpl$exception: RuntimeException</ID>
     <ID>TooGenericExceptionCaught:FixedRetryingTask.kt$FixedRetryingTask$exception: Throwable</ID>
     <ID>TooGenericExceptionCaught:HttpClientImpl.kt$HttpClientImpl$e: Throwable</ID>
-    <ID>TooGenericExceptionCaught:HttpClientImpl.kt$HttpClientImpl$exception: Exception</ID>
     <ID>TooGenericExceptionCaught:HttpLoggerImpl.kt$HttpLoggerImpl$writeLogException: Throwable</ID>
     <ID>TooGenericExceptionCaught:HttpLoggerImpl.kt$HttpLoggerImpl$writeMetricException: Throwable</ID>
-    <ID>TooGenericExceptionCaught:InstallReferrerReader.kt$InstallReferrerReader.&lt;no name provided>$e: Throwable</ID>
-    <ID>TooGenericExceptionCaught:InstallReferrerReader.kt$InstallReferrerReader.&lt;no name provided>$exception: Exception</ID>
+    <ID>TooGenericExceptionCaught:InstallerSourceIdProviderImpl.kt$InstallerSourceIdProviderImpl$e: Throwable</ID>
     <ID>TooGenericExceptionCaught:IntegrationManager.kt$IntegrationManager$exception: Throwable</ID>
     <ID>TooGenericExceptionCaught:IntegrityTokenProvider.kt$IntegrityTokenProvider.IntegrityRetryGetterTask$exception: Exception</ID>
     <ID>TooGenericExceptionCaught:IntegrityTokenProvider.kt$IntegrityTokenProvider.IntegrityTokenGetterTask$exception: Exception</ID>
@@ -113,27 +111,25 @@
     <ID>TooGenericExceptionCaught:PublishEventsQueue.kt$PublishEventsQueue$exception: Exception</ID>
     <ID>TooGenericExceptionCaught:PublishFirebaseAppInstanceIdTask.kt$PublishFirebaseAppInstanceIdTask$exception: Throwable</ID>
     <ID>TooGenericExceptionCaught:RetryingTask.kt$RetryingTask$exception: Throwable</ID>
-    <ID>TooGenericExceptionCaught:SdkConfigTask.kt$SdkConfigTask.ApplyingConfigTask$exception: Throwable</ID>
-    <ID>TooGenericExceptionCaught:TestGroupIdReaderTask.kt$TestGroupIdReaderTask$e: Exception</ID>
     <ID>TooGenericExceptionCaught:UserEventEntity.kt$UserEventEntity$exception: Exception</ID>
     <ID>TooGenericExceptionCaught:UserIdReaderTask.kt$UserIdReaderTask$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:WorkerScheduler.kt$WorkerScheduler$exception: Exception</ID>
     <ID>TooGenericExceptionThrown:UserIdReaderTask.kt$UserIdReaderTask$throw RuntimeException("No unique user id found")</ID>
     <ID>TooManyFunctions:AppEvent.kt$AppEvent</ID>
     <ID>TooManyFunctions:AttributionDAO.kt$AttributionDAO : BaseDAO</ID>
     <ID>TooManyFunctions:AttributionDAOImpl.kt$AttributionDAOImpl : AttributionDAO</ID>
     <ID>TooManyFunctions:AttributionResponse.kt$AttributionResponse</ID>
+    <ID>TooManyFunctions:AttributionResponseImpl.kt$AttributionResponseImpl : AttributionResponse</ID>
+    <ID>TooManyFunctions:BackgroundSenderTaskReceiver.kt$BackgroundSenderTaskReceiver : BroadcastReceiver</ID>
     <ID>TooManyFunctions:BillingTracker.kt$BillingTracker</ID>
-    <ID>TooManyFunctions:CrashHandler.kt$CrashHandler</ID>
     <ID>TooManyFunctions:Database.kt$Database : SQLiteOpenHelper</ID>
     <ID>TooManyFunctions:DatabaseAttributionInterface.kt$DatabaseAttributionInterface : AutoCloseable</ID>
     <ID>TooManyFunctions:DatabaseInterface.kt$DatabaseInterface</ID>
     <ID>TooManyFunctions:DeviceInfoImpl.kt$DeviceInfoImpl : DeviceInfo</ID>
-    <ID>TooManyFunctions:HttpClient.kt$HttpClient</ID>
-    <ID>TooManyFunctions:HttpClientImpl.kt$HttpClientImpl : HttpClient</ID>
     <ID>TooManyFunctions:HttpLoggerImpl.kt$HttpLoggerImpl : HttpLogger</ID>
     <ID>TooManyFunctions:JustTrackSdk.kt$JustTrackSdk</ID>
     <ID>TooManyFunctions:LogAggregatorImpl.kt$LogAggregatorImpl : LogAggregatorAutoCloseable</ID>
-    <ID>TooManyFunctions:PublishEventsQueue.kt$PublishEventsQueue : AutoCloseable</ID>
+    <ID>TooManyFunctions:PublishEventsQueue.kt$PublishEventsQueue : AutoCloseableEventTracker</ID>
     <ID>TooManyFunctions:Store.kt$Store</ID>
   </CurrentIssues>
 </SmellBaseline>

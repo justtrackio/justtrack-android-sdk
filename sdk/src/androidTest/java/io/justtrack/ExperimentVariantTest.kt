@@ -7,7 +7,6 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert
 import org.junit.Before
 import org.junit.Test
-import org.mockito.kotlin.spy
 import java.util.Date
 import java.util.concurrent.LinkedBlockingDeque
 import java.util.concurrent.ThreadPoolExecutor
@@ -30,14 +29,12 @@ internal class ExperimentVariantTest {
 
     @Test
     fun test_calling_api() = runBlocking {
-        val httpClient = spy(BaseTestHttpClient())
-
         val experiment = "experiment1"
         val variant = "variant1"
-        val sdk = TestSdk(context, executorBuilder, httpClient, false)
+        val sdk = TestSdk(context, executorBuilder, false)
         sdk.start()
 
-        sdk.setExperimentVariant(experiment, variant, null, null).await()
+        sdk.setExperimentVariant(experiment, variant, listOf(), null).await()
 
         try {
             sdk.setExperimentVariant(

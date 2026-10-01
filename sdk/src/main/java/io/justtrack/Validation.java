@@ -16,7 +16,7 @@ class Validation {
     }
 
     static boolean validEventName(@NonNull String value) {
-        return value.length() < 256 && TextUtils.isISO8859_1(value);
+        return value.length() < 256 && TextUtils.isISO88591(value);
     }
 
     static boolean validDimensionName(@NonNull String dimension) {
@@ -32,7 +32,7 @@ class Validation {
             return true;
         }
 
-        return value.length() < 4096 && TextUtils.isISO8859_1(value);
+        return value.length() < 4096 && TextUtils.isISO88591(value);
     }
 
     static boolean validUserId(@NonNull String userId) {

@@ -7,6 +7,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import io.justtrack.AttributionImpl.CampaignImpl
 import io.justtrack.AttributionImpl.ChannelImpl
 import io.justtrack.AttributionImpl.PartnerImpl
+import io.justtrack.api.AttributionApi
+import io.justtrack.api.DefaultAttributionApi
 import io.justtrack.database.AttributionEntity
 import io.justtrack.database.Database
 import io.justtrack.log.Logger
@@ -33,15 +35,14 @@ import java.util.concurrent.atomic.AtomicInteger
 
 internal class AttributionDAOImplTest {
     private lateinit var context: Context
-    private lateinit var httpClient: HttpClient
+    private lateinit var attributionApi: AttributionApi
     private lateinit var executorBuilder: ExecutorServiceFactory
 
     private val exampleResponse: AttributionResponse = AttributionResponseImpl(
         UUID.fromString("1db3a1c1-e7e6-4994-949c-23241447e91b"),
         "44750b76-c8d2-4da9-9f25-5704e8cd491f",
         "acquisition",
-        CampaignImpl(5, "test campaign", "acquisition", true),
-        "test",
+        CampaignImpl("5", "test campaign", "acquisition", true),
         ChannelImpl(6, "test channel", true),
         PartnerImpl(7, "test network"),
         "sourceId",
@@ -51,7 +52,6 @@ internal class AttributionDAOImplTest {
         Date(),
         false,
     )
-    private val exampleTestGroup: Int = 2
 
     @Before
     fun setup() {
@@ -63,11 +63,8 @@ internal class AttributionDAOImplTest {
         Database.clearForTesting(context)
         DatabaseInterface.clearForTesting()
 
-        httpClient = object : BaseTestHttpClient() {
-            override suspend fun sendAttributionRequest(logger: Logger, body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
-                return Result.success(AttributionTest.testAttribution)
-            }
-        }
+        attributionApi = TestAttributionApis(AttributionTest.testAttribution)
+
         executorBuilder = ExecutorServiceFactory {
             val executor =
                 ThreadPoolExecutor(
@@ -91,9 +88,15 @@ internal class AttributionDAOImplTest {
         val logger = LoggerImpl()
         val attributionDAO = BaseTestAttributionDAO()
         val database = Database(context, logger, attributionDAO)
-        val databaseInterface = DatabaseInterface(logger, database)
+        val databaseInterface = DatabaseInterface(context, logger, database)
 
-        TestSdk(context, executorBuilder, httpClient, false, databaseInterface = databaseInterface)
+        TestSdk(
+            context,
+            executorBuilder,
+            false,
+            databaseInterface = databaseInterface,
+            attributionApi = attributionApi,
+        )
 
         while (attributionDAO.methodExecuteOrder.size < 1) {
             delay(100)
@@ -111,19 +114,19 @@ internal class AttributionDAOImplTest {
     fun migrateRunOnceNormalTest() = runBlocking {
         context = InstrumentationRegistry.getInstrumentation().targetContext
         val logger = LoggerImpl()
-        val attributionDAO = AttributionDAOImpl(logger)
+        val attributionDAO = AttributionDAOImpl(context, logger)
         val spy = spy(attributionDAO)
         val migrationResults = arrayListOf<Boolean>()
         doAnswer { invocation ->
             val result = invocation.callRealMethod() as Boolean
             migrationResults.add(result)
             result // Return the actual value
-        }.whenever(spy).migrateFromStore(any(), any())
+        }.whenever(spy).migrateFromStore(any())
 
         val database = Database(context, logger, spy)
 
-        database.attributionDAO.migrateFromStore(context, database.writableDatabase)
-        database.attributionDAO.migrateFromStore(context, database.writableDatabase)
+        database.attributionDAO.migrateFromStore(database.writableDatabase)
+        database.attributionDAO.migrateFromStore(database.writableDatabase)
 
         Assert.assertTrue(migrationResults[0])
         Assert.assertFalse(migrationResults[1])
@@ -137,7 +140,7 @@ internal class AttributionDAOImplTest {
     fun migrateOnceWithNoNetworkTest() = runBlocking {
         context = InstrumentationRegistry.getInstrumentation().targetContext
         val logger = LoggerImpl()
-        val attributionDAO = AttributionDAOImpl(logger)
+        val attributionDAO = AttributionDAOImpl(context, logger)
         val spy = spy(attributionDAO)
         val migrationResults = arrayListOf<Boolean>()
 
@@ -145,12 +148,12 @@ internal class AttributionDAOImplTest {
             val result = invocation.callRealMethod() as Boolean
             migrationResults.add(result)
             result // Return the actual value
-        }.whenever(spy).migrateFromStore(any(), any())
+        }.whenever(spy).migrateFromStore(any())
 
         val database = Database(context, logger, spy)
 
-        database.attributionDAO.migrateFromStore(context, database.writableDatabase)
-        database.attributionDAO.migrateFromStore(context, database.writableDatabase)
+        database.attributionDAO.migrateFromStore(database.writableDatabase)
+        database.attributionDAO.migrateFromStore(database.writableDatabase)
 
         Assert.assertTrue(migrationResults.get(0))
         Assert.assertFalse(migrationResults.get(1))
@@ -164,7 +167,7 @@ internal class AttributionDAOImplTest {
     fun migrationMergeEntityCorrectlyTest() {
         context = InstrumentationRegistry.getInstrumentation().targetContext
         val logger = LoggerImpl()
-        val attributionDAO = AttributionDAOImpl(logger)
+        val attributionDAO = AttributionDAOImpl(context, logger)
         val spy = spy(attributionDAO)
         var sharedPrefEntity: AttributionEntity? = null
         var dbEntity: AttributionEntity? = null
@@ -185,12 +188,11 @@ internal class AttributionDAOImplTest {
         Store.setLastVersionLegacy(context, legacyLatestVersion)
         Store.setUserId(context, userId.toString())
         Store.setInstallId(context, installId.toString())
-        Store.setTestGroup(context, 1)
 
         val database = Database(context, logger, spy)
-        val databaseInterface = DatabaseInterface(logger, database)
+        val databaseInterface = DatabaseInterface(context, logger, database)
 
-        TestSdk(context, executorBuilder, httpClient, false, databaseInterface = databaseInterface).start()
+        TestSdk(context, executorBuilder, false, databaseInterface = databaseInterface, attributionApi).start()
         Assert.assertNotNull(sharedPrefEntity)
         Assert.assertNotNull(dbEntity)
         Assert.assertNotNull(mergeEntity)
@@ -203,7 +205,6 @@ internal class AttributionDAOImplTest {
         Assert.assertEquals(installId.toString(), mergeEntity!!.installId)
         Assert.assertEquals(legacyInstalledVersion.toString(), mergeEntity!!.installAppVersion)
         Assert.assertEquals(legacyLatestVersion.toString(), mergeEntity!!.lastAppVersion)
-        Assert.assertEquals(1, mergeEntity!!.testGroup)
     }
 
     /***
@@ -215,13 +216,12 @@ internal class AttributionDAOImplTest {
         val databaseInterface = DatabaseInterface(context, LoggerImpl())
         var stored: AttributionOutput?
         databaseInterface.openAttribution().use {
-            it.setAttributionFinished(context, exampleResponse, exampleTestGroup, null)
-            stored = it.getStoredOutput(context)
+            it.setAttributionFinished(exampleResponse)
+            stored = it.getStoredOutput()
         }
 
         Assert.assertNotNull(stored)
         Assert.assertEquals(exampleResponse, stored!!.getAttributionResponse())
-        Assert.assertEquals(exampleTestGroup, stored!!.getTestGroup())
     }
 
     /***
@@ -282,7 +282,7 @@ internal class AttributionDAOImplTest {
         Store.setInstallVersionLegacy(context, installVersion)
         Store.setLastVersionLegacy(context, lastVersion)
         val database = Database(context, LoggerImpl())
-        val databaseInterface = DatabaseInterface(LoggerImpl(), database)
+        val databaseInterface = DatabaseInterface(context, LoggerImpl(), database)
 
         var version: AppVersionUpdateInfo?
         databaseInterface.openAttribution().use {
@@ -341,7 +341,7 @@ internal class AttributionDAOImplTest {
 
         var versionAtUpdate: AppVersionUpdateInfo?
         databaseInterface.openAttribution().use {
-            it.setAttributionFinished(context, exampleResponse, exampleTestGroup, null)
+            it.setAttributionFinished(exampleResponse)
             versionAtUpdate = it.getAppVersionUpdateInfo(ApplicationVersionImpl("4.3", "43"))
         }
         Assert.assertEquals("4.2", versionAtInstall!!.appInstallVersion.getVersionName())
@@ -362,7 +362,7 @@ internal class AttributionDAOImplTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val databaseInterface = DatabaseInterface(context, LoggerImpl())
         databaseInterface.openAttribution().use {
-            it.setAttributionFinished(context, exampleResponse, exampleTestGroup, null)
+            it.setAttributionFinished(exampleResponse)
         }
         try {
             Thread.sleep(500)
@@ -370,7 +370,7 @@ internal class AttributionDAOImplTest {
             Assert.fail("Unexpected error " + exception.message)
         }
         databaseInterface.openAttribution().use {
-            it.setAttributionFinished(context, exampleResponse, exampleTestGroup, null)
+            it.setAttributionFinished(exampleResponse)
         }
 
         var timestamps: AttributionTimestamps?
@@ -395,22 +395,22 @@ internal class AttributionDAOImplTest {
         Assert.assertNull(timestamps)
     }
 
+    private class TestAttributionApis(val resultObj: JSONObject) : DefaultAttributionApi() {
+        override suspend fun sendAttributionRequest(body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
+            return Result.success(resultObj)
+        }
+    }
+
     internal open class BaseTestAttributionDAO : AttributionDAO {
         val methodExecuteOrder = arrayListOf<String>()
         val migrateRunCount = AtomicInteger(0)
-        override fun migrateFromStore(context: Context, writableDatabase: SQLiteDatabase): Boolean {
+        override fun migrateFromStore(writableDatabase: SQLiteDatabase): Boolean {
             migrateRunCount.incrementAndGet()
             methodExecuteOrder.add("migrateFromStore")
             return true
         }
 
-        override fun setAttributionFinished(
-            writableDatabase: SQLiteDatabase,
-            context: Context,
-            response: AttributionResponse,
-            testGroup: Int?,
-            sdkConfig: String?,
-        ) {
+        override fun setAttributionFinished(writableDatabase: SQLiteDatabase, response: AttributionResponse) {
             methodExecuteOrder.add("setAttributionFinished")
         }
 
@@ -419,22 +419,8 @@ internal class AttributionDAOImplTest {
             return null
         }
 
-        override fun getStoredOutput(context: Context, readableDatabase: SQLiteDatabase): AttributionOutput? {
+        override fun getStoredOutput(readableDatabase: SQLiteDatabase): AttributionOutput? {
             methodExecuteOrder.add("getStoredOutput")
-            return null
-        }
-
-        override fun setTestGroupId(writableDatabase: SQLiteDatabase, testGroupId: Int?) {
-            methodExecuteOrder.add("setTestGroupId")
-        }
-
-        override fun getTestGroupId(readableDatabase: SQLiteDatabase): TestGroupIdReaderTask.TestGroupId? {
-            methodExecuteOrder.add("getTestGroupId")
-            return null
-        }
-
-        override fun getSdkConfig(readableDatabase: SQLiteDatabase): String? {
-            methodExecuteOrder.add("getSdkConfig")
             return null
         }
 
@@ -487,6 +473,10 @@ internal class AttributionDAOImplTest {
         }
 
         override fun setLogger(logger: Logger) {
+            // nop
+        }
+
+        override fun migrateAttributionToV8(writableDatabase: SQLiteDatabase) {
             // nop
         }
 

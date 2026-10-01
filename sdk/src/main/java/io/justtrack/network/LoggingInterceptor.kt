@@ -21,7 +21,7 @@ internal class LoggingInterceptor internal constructor(val logger: Logger?) : In
                 val buffer = Buffer()
                 body.writeTo(buffer)
                 val charset = body.contentType()?.charset(Charsets.UTF_8) ?: Charsets.UTF_8
-                appendLine("Body: ${buffer.readString(charset)}")
+                appendLine("Request Body: ${buffer.readString(charset)}")
             }
             append("--> END ${request.method}")
         }
@@ -50,7 +50,7 @@ internal class LoggingInterceptor internal constructor(val logger: Logger?) : In
                 appendLine("$name: $value")
             }
             if (bodyString != null) {
-                appendLine("Body: $bodyString")
+                appendLine("Response Body: $bodyString")
             }
             append("<-- END HTTP")
         }

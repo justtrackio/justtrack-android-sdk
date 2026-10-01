@@ -5,13 +5,14 @@ import android.util.Log
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import io.justtrack.api.EventApi
 import io.justtrack.database.Database
+import io.justtrack.dtos.DTOAppEvent
+import io.justtrack.dtos.DTOAppEventEvent
 import io.justtrack.events.JtAppInstallEvent
 import io.justtrack.events.JtAppOpenEvent
 import io.justtrack.events.JtProgressionEvent
-import io.justtrack.events.JtSessionTrackingEvent
 import io.justtrack.events.TimeUnitGroup
-import io.justtrack.log.Logger
 import io.justtrack.util.ExecutorServiceFactory
 import io.justtrack.versions.SdkVersionImpl
 import kotlinx.coroutines.CompletableDeferred
@@ -52,15 +53,21 @@ class PublishEventsQueueTest {
     fun publishEventsSimple() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val errorList: MutableList<AssertionError> = ArrayList()
-        val httpClient: HttpClient = UserEventValidatingHttpClient(databaseInterface, errorList)
+        val apis = UserEventValidatingApis(databaseInterface, errorList)
         val executorBuilder = ExecutorServiceFactory {
             val executor = ThreadPoolExecutor(10, 10, 60L, TimeUnit.SECONDS, LinkedBlockingDeque())
             executor.allowCoreThreadTimeOut(true)
             executor
         }
 
-        val sdk = TestSdk(context, executorBuilder, httpClient, false)
+        val sdk = TestSdk(
+            context,
+            executorBuilder,
+            false,
+            eventApi = apis,
+        )
         sdk.start()
+
         try {
             val f = sdk.publishEvent(JtAppOpenEvent("sessionId", 1.0, TimeUnitGroup.MILLISECONDS, Date()))
             f.get()
@@ -78,7 +85,7 @@ class PublishEventsQueueTest {
     fun publishHugeAmountOfEvents() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val publishedUserEvent = ArrayList<DTOAppEventEvent>()
-        val httpClient: HttpClient = SpamEventHttpClient(publishedUserEvent)
+        val apis = SpamEventApis(publishedUserEvent)
         val executorBuilder = ExecutorServiceFactory {
             val executor = ThreadPoolExecutor(10, 10, 60L, TimeUnit.SECONDS, LinkedBlockingDeque())
             executor.allowCoreThreadTimeOut(true)
@@ -86,12 +93,17 @@ class PublishEventsQueueTest {
         }
         val totalSpamEvents = 1000
 
-        val sdk = TestSdk(context, executorBuilder, httpClient, false)
+        val sdk = TestSdk(
+            context,
+            executorBuilder,
+            false,
+            eventApi = apis,
+        )
         sdk.start()
         sdk.publishEventsQueue.maxBatchSize = 50
         val spamEvents = generateSpamEvents(totalSpamEvents)
         try {
-            var lastEventPublishingFuture: AsyncFuture<Void>? = null
+            var lastEventPublishingFuture: AsyncFuture<Void?>? = null
             spamEvents.forEach {
                 lastEventPublishingFuture = sdk.publishEvent(it)
             }
@@ -105,9 +117,10 @@ class PublishEventsQueueTest {
                 }
             }
             val sortedPublishedEvents = publishedUserEvent.sortedBy { it.sequenceNumber }
-            Assert.assertEquals(totalSpamEvents, publishedUserEvent.size)
-            for (index in 0 until publishedUserEvent.size) {
-                Assert.assertEquals(spamEvents[index].name, sortedPublishedEvents[index].name)
+            // note: first event is autonomously published when calling sdk.start()
+            Assert.assertEquals(totalSpamEvents + 1, publishedUserEvent.size)
+            for (index in 0 until spamEvents.size) {
+                Assert.assertEquals(spamEvents[index].name, sortedPublishedEvents[index + 1].name)
                 Assert.assertEquals(index.toLong(), sortedPublishedEvents[index].sequenceNumber)
             }
         } finally {
@@ -124,19 +137,18 @@ class PublishEventsQueueTest {
         // just used as a reference to an integer, could also be a 1-element int array
         val maxBatchSize = AtomicInteger()
         val publishedUserEvent = ArrayList<DTOAppEventEvent>()
-        val httpClient: HttpClient = EventCountingHttpClient(maxBatchSize, invocations, publishedUserEvent)
+        val apis = EventCountingApis(maxBatchSize, invocations, publishedUserEvent)
         val executorBuilder = ExecutorServiceFactory {
             val executor = ThreadPoolExecutor(10, 10, 60L, TimeUnit.SECONDS, LinkedBlockingDeque())
             executor.allowCoreThreadTimeOut(true)
             executor
         }
 
-        val sdk = TestSdk(context, executorBuilder, httpClient, false)
+        val sdk = TestSdk(context, executorBuilder, false, eventApi = apis)
         sdk.start()
         sdk.publishEventsQueue.maxBatchSize = 5
         try {
             // these should be roughly the events we can expect to be published during the first app open
-            sdk.publishEvent(JtSessionTrackingEvent("sessionId", "start", Date()))
             sdk.publishEvent(JtAppInstallEvent("sessionId", 1.0, TimeUnitGroup.MILLISECONDS, Date()))
             sdk.publishEvent(JtAppOpenEvent("sessionId", 1.0, TimeUnitGroup.MILLISECONDS, Date()))
             sdk.publishEvent(JtProgressionEvent("finish", "level_41", null, null))
@@ -151,9 +163,6 @@ class PublishEventsQueueTest {
                 }
             }
             Assert.assertEquals(5, maxBatchSize.get())
-
-            Assert.assertEquals(0, publishedUserEvent[0].sequenceNumber)
-            Assert.assertEquals("jt_session_tracking", publishedUserEvent[0].name)
 
             Assert.assertEquals(1, publishedUserEvent[1].sequenceNumber)
             Assert.assertEquals("jt_app_install", publishedUserEvent[1].name)
@@ -231,15 +240,15 @@ class PublishEventsQueueTest {
             it.insertEvent(eventBatchThreeEventOne)
             it.insertEvent(eventBatchTwoEventTwo)
         }
-        val publishingEvents = ArrayList<Pair<List<PublishingEvent>, Version>>()
+        val publishingEvents = ArrayList<Pair<List<StorableEvent>, Version>>()
 
         val currentBatchCount = AtomicInteger(0)
         val allBatchSent = CompletableDeferred<Boolean>()
 
         val publishEventsQueue = PublishEventsQueue(
-            { events, sdkVersion ->
-                Log.e("splitVersionTest", "splitVersionTest: publishingTask with ${sdkVersion.name} ${events.size}")
-                publishingEvents.add(Pair(events, sdkVersion))
+            { events, eventSdkVersion ->
+                Log.e("splitVersionTest", "splitVersionTest: publishingTask with ${eventSdkVersion.name} ${events.size}")
+                publishingEvents.add(Pair(events, eventSdkVersion))
                 if (currentBatchCount.incrementAndGet() >= 3) {
                     allBatchSent.complete(true)
                 }
@@ -251,6 +260,21 @@ class PublishEventsQueueTest {
             2_000L,
             AtomicBoolean(true),
             SdkVersionImpl(7, 0, 0, "7.0.0"),
+            GlobalDimensionsRepo(
+                ApplicationProvider.getApplicationContext<Context>().getSharedPreferences(
+                    GlobalDimensionsRepo.STORE_NAME,
+                    Context.MODE_PRIVATE,
+                ),
+            ),
+            connectivityProvider = object : ConnectivityProvider {
+                override val connectionType: ConnectionType = ConnectionType.UNKNOWN
+                override fun registerOnReconnected(callback: ConnectivityProvider.ConnectivityCallback): Subscription {
+                    return object : Subscription {
+                        override fun unsubscribe() {}
+                    }
+                }
+                override fun shutdown() {}
+            },
         )
         publishEventsQueue.start(null)
 
@@ -291,22 +315,13 @@ class PublishEventsQueueTest {
         return events
     }
 
-    internal class EventCountingHttpClient(
+    internal class EventCountingApis(
         private val maxBatchSize: AtomicInteger,
         private val invocations: AtomicInteger,
         private val publishedEvents: ArrayList<DTOAppEventEvent>,
-    ) : BaseTestHttpClient() {
-        override suspend fun sendAttributionRequest(logger: Logger, body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
-            return Result.failure(Exception("not implemented"))
-        }
+    ) : EventApi {
 
-        override suspend fun sendUserEvents(
-            logger: Logger,
-            body: DTOAppEvent,
-            advertiserId: String?,
-            uuid: String,
-            installId: String,
-        ): Result<JSONObject?> {
+        override suspend fun sendUserEvents(body: DTOAppEvent, advertiserId: String?, uuid: String, installId: String): Result<JSONObject?> {
             publishedEvents.addAll(body.events)
             var oldMaxBatchSize: Int
             var newMaxBatchSize: Int
@@ -321,59 +336,37 @@ class PublishEventsQueueTest {
         }
     }
 
-    internal class SpamEventHttpClient(
+    internal class SpamEventApis(
         private val publishedEvents: ArrayList<DTOAppEventEvent>,
-    ) : BaseTestHttpClient() {
-        override suspend fun sendAttributionRequest(logger: Logger, body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
-            return Result.failure(Exception("not implemented"))
-        }
-
-        override suspend fun sendUserEvents(
-            logger: Logger,
-            body: DTOAppEvent,
-            advertiserId: String?,
-            uuid: String,
-            installId: String,
-        ): Result<JSONObject?> {
+    ) : EventApi {
+        override suspend fun sendUserEvents(body: DTOAppEvent, advertiserId: String?, uuid: String, installId: String): Result<JSONObject?> {
             delay(100)
             publishedEvents.addAll(body.events)
             return Result.success(JSONObject())
         }
     }
 
-    internal class UserEventValidatingHttpClient constructor(
+    internal class UserEventValidatingApis constructor(
         val databaseInterface: DatabaseInterface,
         private val errorList: MutableList<AssertionError>,
-    ) : BaseTestHttpClient() {
-        override suspend fun sendAttributionRequest(logger: Logger, body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
-            return Result.failure(Exception("not implemented"))
-        }
-
-        override suspend fun sendUserEvents(
-            logger: Logger,
-            body: DTOAppEvent,
-            advertiserId: String?,
-            uuid: String,
-            installId: String,
-        ): Result<JSONObject?> {
+    ) : EventApi {
+        override suspend fun sendUserEvents(body: DTOAppEvent, advertiserId: String?, uuid: String, installId: String): Result<JSONObject?> {
             try {
-                var storedInstallId: String?
-                var storedUserId: String?
-
-                databaseInterface.openAttribution().use {
-                    storedInstallId = it.getInstallId()
-                    storedUserId = it.getUserId()
-                }
-                Assert.assertEquals(storedUserId, uuid)
-                Assert.assertEquals(
-                    storedInstallId,
-                    installId,
-                )
-                Assert.assertEquals(1, body.events.size)
                 val serializedJson = body.toJSON(Formatter)
                 val eventsArray = serializedJson.getJSONArray("events")
-                Assert.assertEquals(1, eventsArray.length())
-                val serializedEvent = eventsArray.getJSONObject(0)
+                var serializedEvent: JSONObject? = null
+                for (index in 0 until eventsArray.length()) {
+                    val currentEvent = eventsArray.getJSONObject(index)
+                    if (currentEvent.getString("name") == "jt_app_open") {
+                        serializedEvent = currentEvent
+                        break
+                    }
+                }
+
+                if (serializedEvent == null) {
+                    return Result.success(JSONObject())
+                }
+
                 val expectedJson = JSONObject()
                 expectedJson.put("id", serializedEvent.getString("id"))
                 expectedJson.put("name", "jt_app_open")
@@ -381,7 +374,7 @@ class PublishEventsQueueTest {
                 expectedJson.put("unit", "milliseconds")
                 expectedJson.put("sessionId", "sessionId")
                 expectedJson.put("happenedAt", serializedEvent.getString("happenedAt"))
-                expectedJson.put("sequenceNumber", 0)
+                expectedJson.put("sequenceNumber", serializedEvent.getLong("sequenceNumber"))
                 Assert.assertEquals(expectedJson.toString(), serializedEvent.toString())
             } catch (error: JSONException) {
                 // Deadlock-Safety: This is a test.

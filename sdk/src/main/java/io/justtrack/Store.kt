@@ -11,7 +11,6 @@ internal object Store {
     private const val KEY_INSTALL_ID = "install_id"
     private const val KEY_INSTALL_APP_VERSION = "install_app_version"
     private const val KEY_LAST_APP_VERSION = "last_app_version"
-    private const val KEY_TEST_GROUP = "test_group"
 
     private const val KEY_IS_MIGRATED_DB = "is_migrated_db"
 
@@ -20,38 +19,32 @@ internal object Store {
     @VisibleForTesting
     @JvmStatic
     fun clearForTesting(context: Context) {
-        getSharedPreferences(context).clearIO()
+        getSharedPreferences(context).clear()
     }
 
     @JvmStatic
     fun setUserId(context: Context, userId: String?) {
-        getSharedPreferences(context).putStringIO(KEY_USER_ID, userId)
+        getSharedPreferences(context).putString(KEY_USER_ID, userId)
     }
 
     @JvmStatic
     fun setInstallId(context: Context, installId: String?) {
-        getSharedPreferences(context).putStringIO(KEY_INSTALL_ID, installId)
+        getSharedPreferences(context).putString(KEY_INSTALL_ID, installId)
     }
 
     @JvmStatic
     fun getInstallId(context: Context): String? {
-        return getSharedPreferences(context).getStringIO(KEY_INSTALL_ID, null)
+        return getSharedPreferences(context).getString(KEY_INSTALL_ID, null)
     }
 
     @JvmStatic
     fun setMigratedToDB(context: Context, isMigrated: Boolean) {
-        getSharedPreferences(context).putIntIO(KEY_IS_MIGRATED_DB, isMigrated.toInt())
+        getSharedPreferences(context).putInt(KEY_IS_MIGRATED_DB, isMigrated.toInt())
     }
 
     @JvmStatic
     fun isMigratedToDB(context: Context): Boolean {
-        return getSharedPreferences(context).getIntIO(KEY_IS_MIGRATED_DB, 0).toBoolean()
-    }
-
-    @VisibleForTesting
-    @JvmStatic
-    fun setTestGroup(context: Context, testGroup: Int) {
-        getSharedPreferences(context).putIntIO(KEY_TEST_GROUP, testGroup)
+        return getSharedPreferences(context).getInt(KEY_IS_MIGRATED_DB, 0).toBoolean()
     }
 
     @JvmStatic
@@ -88,12 +81,12 @@ internal object Store {
         val isDataMigrated: Boolean = checkType<String>(sharedPreferences, key) ?: return default
 
         if (isDataMigrated) {
-            val versionString = sharedPreferences.getStringIO(key, null)
+            val versionString = sharedPreferences.getString(key, null)
             if (versionString != null) {
                 return versionString
             }
         } else {
-            val versionNo = sharedPreferences.getLongIO(key, -1)
+            val versionNo = sharedPreferences.getLong(key, -1)
             val version = versionNo.toString()
             sharedPreferences.edit()
                 .remove(key)
@@ -108,7 +101,7 @@ internal object Store {
     private fun getSharedPreferences(context: Context): SharedPreferences {
         val currentStore = sharePref
         return if (currentStore == null) {
-            val result = context.getSharePrefIO(
+            val result = context.getSharedPreferences(
                 NAME,
                 Context.MODE_PRIVATE,
             )

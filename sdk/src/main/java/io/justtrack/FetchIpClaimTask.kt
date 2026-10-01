@@ -1,24 +1,25 @@
 package io.justtrack
 
 import android.accounts.NetworkErrorException
-import io.justtrack.attribution.AdvertiserIdInfo
+import io.justtrack.api.AttributionApi
+import io.justtrack.dtos.DTOSignIPResponse
 import io.justtrack.log.Logger
 import io.justtrack.log.LoggerFieldsBuilder
+import io.justtrack.providers.AdvertiserIdProvider
 
 internal class FetchIpClaimTask(
     private val deviceInfo: DeviceInfo,
-    private val advertiserId: AsyncFuture<AdvertiserIdInfo>,
-    private val httpClient: HttpClient,
+    private val advertiserIdProvider: AdvertiserIdProvider,
+    private val attributionApi: AttributionApi,
     private val logger: Logger,
     private val protocol: IPProtocol,
 ) : Task<String> {
     override suspend fun execute(): String {
         val connectionType = deviceInfo.getConnectionType()
         val start = System.currentTimeMillis()
-        val advertiserIdValue = advertiserId.await().advertiserId
+        val advertiserIdValue = advertiserIdProvider.provideAdvertiserId().await().advertiserId
 
-        val result = httpClient.getSignedIpClaim(
-            logger,
+        val result = attributionApi.getSignedIpClaim(
             protocol,
             advertiserIdValue,
         )

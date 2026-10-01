@@ -1,24 +1,25 @@
 package io.justtrack
 
 import android.content.ContentValues
-import androidx.annotation.VisibleForTesting
 import io.justtrack.database.Database
 import io.justtrack.database.DatabaseEntity
+import io.justtrack.dtos.DTOLogMetric
 import io.justtrack.log.Logger
 import org.json.JSONException
 import org.json.JSONObject
 import java.text.ParseException
 import java.util.Calendar
+import org.jetbrains.annotations.VisibleForTesting
 
 internal data class LogMetricEntity(
     @get:VisibleForTesting override var id: Long = -1,
-    @get:VisibleForTesting val name: String,
-    @get:VisibleForTesting val value: Double,
-    @get:VisibleForTesting val dimensions: String,
-    @get:VisibleForTesting val unit: String,
-    @get:VisibleForTesting val timestamp: String,
-    @get:VisibleForTesting val timestampInMS: Long,
-    @get:VisibleForTesting var processingTimeInMS: Long = -1,
+    @get:VisibleForTesting internal val name: String,
+    @get:VisibleForTesting internal val value: Double,
+    @get:VisibleForTesting internal val dimensions: String,
+    @get:VisibleForTesting internal val unit: String,
+    @get:VisibleForTesting internal val timestamp: String,
+    @get:VisibleForTesting internal val timestampInMS: Long,
+    @get:VisibleForTesting internal var processingTimeInMS: Long = -1,
 ) : DatabaseEntity {
     internal constructor(data: LogStoreMetric, formatter: Formatter) : this(
         id = data.id,
@@ -81,6 +82,7 @@ internal data class LogMetricEntity(
         return contentValues
     }
 
+    // This is require because this equal method ignore the id field in the database.
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false

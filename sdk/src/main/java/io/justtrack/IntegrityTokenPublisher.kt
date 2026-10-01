@@ -1,6 +1,9 @@
 package io.justtrack
 
 import androidx.annotation.VisibleForTesting
+import io.justtrack.api.IntegrityApi
+import io.justtrack.dtos.DTOIntegrityToken
+import io.justtrack.executor.TaskExecutor
 
 internal class IntegrityTokenPublisher(
     private val taskExecutor: TaskExecutor,
@@ -22,7 +25,7 @@ internal class IntegrityTokenPublisher(
     internal fun publishIntegrityTokenIfNotAlreadyRunning(
         logger: HttpLogger,
         networkErrorLogger: NetworkErrorLogger,
-        httpClient: HttpClient,
+        integrityApi: IntegrityApi,
         databaseInterface: DatabaseInterface,
         integrityTokenProvideMethod: () -> AsyncFuture<IntegrityTokenData>,
         installInstanceIdFuture: AsyncFuture<String>,
@@ -33,7 +36,7 @@ internal class IntegrityTokenPublisher(
             val newIntegrityTokenFuture = publishIntegrityToken(
                 logger,
                 networkErrorLogger,
-                httpClient,
+                integrityApi,
                 databaseInterface,
                 integrityTokenProvideMethod,
                 installInstanceIdFuture,
@@ -50,17 +53,17 @@ internal class IntegrityTokenPublisher(
     internal fun publishIntegrityToken(
         logger: HttpLogger,
         networkErrorLogger: NetworkErrorLogger,
-        httpClient: HttpClient,
+        integrityApi: IntegrityApi,
         databaseInterface: DatabaseInterface,
         integrityTokenProvideMethod: () -> AsyncFuture<IntegrityTokenData>,
         installInstanceIdFuture: AsyncFuture<String>,
     ): AsyncFuture<Boolean> {
-        return taskExecutor.executeAsFuture(
+        return taskExecutor.executeFuture(
             PublishIntegrityRetryTask(
                 FixedRetryingTask(
                     PublishIntegrityTokenTask(
                         logger,
-                        httpClient,
+                        integrityApi,
                         databaseInterface,
                         integrityTokenProvideMethod,
                         installInstanceIdFuture,
@@ -98,7 +101,7 @@ internal class IntegrityTokenPublisher(
 
     internal open class PublishIntegrityTokenTask(
         private val logger: HttpLogger,
-        private val httpClient: HttpClient,
+        private val integrityApi: IntegrityApi,
         private val databaseInterface: DatabaseInterface,
         private val integrityTokenProvideMethod: () -> AsyncFuture<IntegrityTokenData>,
         private val installInstanceIdFuture: AsyncFuture<String>,
@@ -123,8 +126,7 @@ internal class IntegrityTokenPublisher(
 
             logger.debug(if (integrityTokenData.token != null) "Publishing integrity token" else "Publishing integrity token error")
 
-            val result = httpClient.reportIntegrity(
-                logger,
+            val result = integrityApi.reportIntegrity(
                 body,
                 installInstanceId,
             )

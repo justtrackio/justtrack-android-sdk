@@ -22,7 +22,6 @@ import io.justtrack.AsyncFuture;
 import io.justtrack.AttributionException;
 import io.justtrack.JustTrackSdk;
 import io.justtrack.JustTrackSdkBuilder;
-import io.justtrack.SdkBuilder;
 import io.justtrack.TestLoggerImpl;
 import io.justtrack.attribution.Attribution;
 import io.justtrack.exceptions.SdkNotTrackingException;
@@ -38,7 +37,7 @@ public class ErrorTest {
         Assert.assertNull(sdk);
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
 
-        SdkBuilder builder = new JustTrackSdkBuilder((Application) context.getApplicationContext(), API_TOKEN);
+        JustTrackSdkBuilder builder = new JustTrackSdkBuilder((Application) context.getApplicationContext(), API_TOKEN);
         builder = builder.setLogger(logger);
         sdk = builder.build();
         Assert.assertNotNull(sdk);

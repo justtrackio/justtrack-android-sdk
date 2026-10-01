@@ -31,13 +31,6 @@ internal interface HttpLogger : Logger, AutoCloseable {
     fun setUser(userId: UUID?, installId: String)
 
     /**
-     * Set the config form server to limit the logs and metrics sent to backend.
-     *
-     * @param config The config containing the log and metric rules.
-     */
-    fun setLogAndMetricRules(config: DTOAttributionOutputSdkConfig)
-
-    /**
      * Send aggregated logs to the server.
      */
     fun sendToServer()

@@ -8,13 +8,13 @@ internal interface EventRepository : AutoCloseable {
      * @param data the event to be store.
      * @return A pair of value, the auto-generated ID of the inserted event and sequence number of event
      */
-    suspend fun storeEntity(data: PublishingEvent): Pair<Long, Long>?
+    suspend fun storeEntity(data: StorableEvent): Pair<Long, Long>?
 
     /**
      * store entities in database, if needed it can also return List<Long> as well.
      * @param dataList the list of entity to be store. Note, the entity class must be annotate with @Entity.
      */
-    suspend fun storeEntities(dataList: List<PublishingEvent>)
+    suspend fun storeEntities(dataList: List<StorableEvent>)
 
     /**
      * removing entity by comparing the entity's creation timestamp(timestampInMS) and the provided cutOffMS.
@@ -31,7 +31,7 @@ internal interface EventRepository : AutoCloseable {
      * @param batchSize the maximum size of the list to be retrieve. By default it is 100.
      * @return A list of entity that is being mark and ready to be send to server.
      */
-    suspend fun fetchNextBatchAndMark(batchSize: Int = 100): List<PublishingEvent>
+    suspend fun fetchNextBatchAndMark(batchSize: Int = 100): List<StorableEvent>
 
     /**
      * Receiving the list of entity by their id to "mark" them. Meaning to update the following
@@ -52,11 +52,11 @@ internal interface EventRepository : AutoCloseable {
      * Removing a list of entity by their id.
      * @param dataList a list of id of the entity, to be removing from database
      */
-    suspend fun deleteEntities(dataList: List<PublishingEvent>)
+    suspend fun deleteEntities(dataList: List<StorableEvent>)
 
     @VisibleForTesting
-    suspend fun getAll(): List<PublishingEvent>
+    suspend fun getAll(): List<StorableEvent>
 
     @VisibleForTesting
-    suspend fun getAllUnMark(): List<PublishingEvent>
+    suspend fun getAllUnMark(): List<StorableEvent>
 }

@@ -5,11 +5,11 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.google.android.play.core.integrity.StandardIntegrityException
 import com.google.android.play.core.integrity.StandardIntegrityManager.StandardIntegrityTokenProvider
 import io.justtrack.IntegrityTokenProvider.Companion.UNKNOWN_ERROR_CODE
+import io.justtrack.api.DefaultAttributionApi
 import io.justtrack.database.Database
 import io.justtrack.exceptions.IntegrityException
 import io.justtrack.integrity.IntegrityToken
 import io.justtrack.integrity.StandardTokenProviderTask
-import io.justtrack.log.Logger
 import io.justtrack.util.ExecutorServiceFactory
 import junit.framework.TestCase.fail
 import kotlinx.coroutines.runBlocking
@@ -50,14 +50,14 @@ internal class IntegrityProviderTest {
         val logger = mock<HttpLogger>()
 
         whenever(getterTask.execute()).thenReturn(IntegrityTokenData(token = expectedResult.toString()))
-        val httpClient: HttpClient = TestHttpClient()
+        val api = TestApis()
         val executorBuilder = ExecutorServiceFactory {
             val executor = ThreadPoolExecutor(10, 10, 60L, TimeUnit.SECONDS, LinkedBlockingDeque())
             executor.allowCoreThreadTimeOut(true)
             executor
         }
 
-        val sdk = TestSdk(context, executorBuilder, httpClient, false)
+        val sdk = TestSdk(context, executorBuilder, false, attributionApi = api)
         val provider = IntegrityTokenProvider(
             sdk.taskExecutor,
             context,
@@ -65,7 +65,6 @@ internal class IntegrityProviderTest {
             null,
             RetryConfig.TEST_INTEGRITY_CONFIG,
         )
-
         val result =
             provider.getOrRenewFuture(
                 logger,
@@ -97,7 +96,7 @@ internal class IntegrityProviderTest {
     }
 
     @Test
-    internal fun retryGetter_retryAndFailTest() = runBlocking {
+    fun retryGetter_retryAndFailTest() = runBlocking {
         val logger = mock<HttpLogger>()
         val getterTask = mock<IntegrityTokenProvider.IntegrityTokenGetterTask>()
         whenever(getterTask.execute()).then {
@@ -157,7 +156,7 @@ internal class IntegrityProviderTest {
         val secretProviderTask = TestAsyncFuture<String>("")
 
         val provider = IntegrityTokenProvider(
-            TaskExecutorTest(),
+            immediateTaskExecutor(),
             context,
             deviceInfo,
             null,
@@ -187,7 +186,7 @@ internal class IntegrityProviderTest {
         val logger = mock<HttpLogger>()
         val secretProviderTask = TestAsyncFuture<String>("")
         val provider = IntegrityTokenProvider(
-            TaskExecutorTest(),
+            immediateTaskExecutor(),
             context,
             deviceInfo,
             null,
@@ -224,7 +223,7 @@ internal class IntegrityProviderTest {
         val logger = mock<HttpLogger>()
         val secretProviderTask = TestAsyncFuture<String>("")
         val provider = IntegrityTokenProvider(
-            TaskExecutorTest(),
+            immediateTaskExecutor(),
             context,
             deviceInfo,
             null,
@@ -267,7 +266,7 @@ internal class IntegrityProviderTest {
         val logger = mock<HttpLogger>()
         val secretProviderTask = TestAsyncFuture<String>("")
         val provider = IntegrityTokenProvider(
-            TaskExecutorTest(),
+            immediateTaskExecutor(),
             context,
             deviceInfo,
             null,
@@ -309,7 +308,7 @@ internal class IntegrityProviderTest {
         val logger = mock<HttpLogger>()
         val secretProviderTask = TestAsyncFuture("")
         val provider = IntegrityTokenProvider(
-            TaskExecutorTest(),
+            immediateTaskExecutor(),
             context,
             deviceInfo,
             null,
@@ -347,7 +346,7 @@ internal class IntegrityProviderTest {
         val logger = mock<HttpLogger>()
         val secretProviderTask = TestAsyncFuture<String>("")
         val provider = IntegrityTokenProvider(
-            TaskExecutorTest(),
+            immediateTaskExecutor(),
             context,
             deviceInfo,
             null,
@@ -375,8 +374,8 @@ internal class IntegrityProviderTest {
         Assert.assertEquals(UNKNOWN_ERROR_CODE, result.integrityException?.errorCode)
     }
 
-    internal class TestHttpClient : BaseTestHttpClient() {
-        override suspend fun sendAttributionRequest(logger: Logger, body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
+    internal class TestApis : DefaultAttributionApi() {
+        override suspend fun sendAttributionRequest(body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
             return Result.success(null)
         }
     }

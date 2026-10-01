@@ -79,6 +79,12 @@
                     android:layout_height="wrap_content"
                     android:text="@string/re_fetch"
                     android:padding="2dp"/>
+                <Button
+                    android:id="@+id/isTrackingRefreshButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/is_tracking_refresh"
+                    android:padding="2dp"/>
             </LinearLayout>
 
             <TextView
@@ -93,13 +99,6 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:text="@string/loading_advertiser_id" />
-
-            <TextView
-                android:id="@+id/testGroupView"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="@string/loading_test_group" />
 
             <TextView
                 android:id="@+id/intentTextView"

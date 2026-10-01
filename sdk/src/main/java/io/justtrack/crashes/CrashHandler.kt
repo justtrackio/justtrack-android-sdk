@@ -1,18 +1,7 @@
 package io.justtrack.crashes
 
-import android.os.Looper
-import io.justtrack.JtCrashReporter.Companion.ANR_TIMEOUT
-import io.justtrack.JtCrashReporter.Companion.STACKTRACE_FILE_PREFIX
-import io.justtrack.exceptions.ANRException
 import io.justtrack.log.Logger
 import io.justtrack.log.LoggerFieldsBuilder
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.lang.Thread.UncaughtExceptionHandler
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -24,10 +13,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  * @property isTracking A thread-safe flag indicating whether SDK tracking is enabled.
  */
 internal class CrashHandler internal constructor(
-    packageName: String,
     private val crashReporter: CrashReporter,
     private val logger: Logger,
     private val isTracking: AtomicBoolean,
+    crashReportNativeLoader: CrashReportNativeLoader,
 ) {
 
     /**
@@ -50,30 +39,16 @@ internal class CrashHandler internal constructor(
             defaultHandler?.uncaughtException(thread, exception)
         }
 
-    private var isAppResponding = AtomicBoolean(true)
-    private var anrCurrentJob: Job? = null
-    private var anrCheckJob: Job? = null
-
     init {
-        System.loadLibrary("lib-crash-report")
-        registerListener(packageName, STACKTRACE_FILE_PREFIX)
+        crashReportNativeLoader.load()
     }
 
     /**
      * Installs the SDK's custom uncaught exception handler as the default for all threads.
      */
-    fun installUncaughtExceptionHandler() {
+    @JvmName("installUncaughtExceptionHandler")
+    internal fun installUncaughtExceptionHandler() {
         Thread.setDefaultUncaughtExceptionHandler(sdkUncaughtExceptionHandler)
-    }
-
-    @JvmName("onResume")
-    internal fun onResume() {
-        startANRDetection()
-    }
-
-    @JvmName("onPause")
-    internal fun onPause() {
-        stopANRDetection()
     }
 
     /**
@@ -84,104 +59,17 @@ internal class CrashHandler internal constructor(
         return sdkUncaughtExceptionHandler
     }
 
-    private fun startANRDetector() {
-        cancelJob(anrCurrentJob)
-
-        anrCurrentJob = CoroutineScope(Dispatchers.IO).launch {
-            do {
-                cancelJob(anrCheckJob)
-                anrCheckJob = CoroutineScope(Dispatchers.Main).launch {
-                    delay(ANR_TIMEOUT)
-                    isAppResponding.set(true)
-                }
-
-                delay(ANR_TIMEOUT + ANR_TIMEOUT)
-            } while (isAppResponding.getAndSet(false))
-
-            onANRDetectCallback()
-
-            // Check the Main thread's responsiveness
-            waitMainThread()
-
-            // Restart the ANR detector loop
-            startANRDetector()
-        }
-    }
-
-    private suspend fun waitMainThread() {
-        val isMainThreadCompleted = CompletableDeferred<Boolean>()
-        withContext(Dispatchers.Main) {
-            isMainThreadCompleted.complete(true)
-        }
-        isMainThreadCompleted.await()
-    }
-
-    private fun startANRDetection() {
-        startANRDetector()
-    }
-
-    private fun stopANRDetection() {
-        cancelJob(anrCurrentJob)
-        cancelJob(anrCheckJob)
-    }
-
-    private fun cancelJob(job: Job?) {
-        job?.let {
-            if (it.isActive) {
-                it.cancel()
-            }
-        }
-    }
-
-    private fun onANRDetectCallback() {
-        val stackTrace = Looper.getMainLooper().thread.stackTrace
-        val message = StringBuilder("Detected ANR:\n\n")
-
-        for ((thread, stacktrace) in Thread.getAllStackTraces()) {
-            val id = thread.id
-            val name = thread.name
-            val state = thread.state
-            val daemon = thread.isDaemon
-            val priority = thread.priority
-
-            val reportThread =
-                when (state) {
-                    Thread.State.BLOCKED -> true
-                    Thread.State.NEW -> false
-                    Thread.State.RUNNABLE -> false
-                    Thread.State.TERMINATED -> false
-                    Thread.State.TIMED_WAITING -> false
-                    Thread.State.WAITING -> !daemon
-                    null -> false
-                }
-
-            if (!reportThread) {
-                continue
-            }
-
-            message.append("Thread $id (priority = $priority, name = $name${if (daemon) ", daemon" else ""}) in state $state")
-            for (elem in stacktrace) {
-                message.append("  at ").append(elem.toString()).append('\n')
-            }
-            message.append('\n')
-        }
-
-        message.append("=== Finished thread dump ===")
-
-        capturingException(ANRException(message.toString(), stackTrace))
-    }
-
-    private fun capturingException(throwable: Throwable) {
+    @JvmName("capturingException")
+    internal fun capturingException(throwable: Throwable): Void? {
         if (!InternalCrashChecker.isInternalCrash(throwable.stackTraceToString())) {
             val fields = LoggerFieldsBuilder()
             fields.with("stack_trace", throwable.stackTraceToString())
             logger.info("Application crash dropped", fields)
 
-            return
+            return null
         }
 
         crashReporter.captureException(throwable)
+        return null
     }
-
-    external fun registerListener(applicationPackageName: String, stacktraceFilePrefix: String)
 }

@@ -13,5 +13,7 @@
             android:name=".InitializerContentProvider"
             android:authorities="${applicationId}.io.justtrack.sdk.contentProvider"
             android:exported="false" />
+
+        <receiver android:name=".BackgroundSenderTaskReceiver" />
     </application>
 </manifest>

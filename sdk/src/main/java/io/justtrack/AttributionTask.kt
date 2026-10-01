@@ -1,19 +1,20 @@
 package io.justtrack
 
 import android.content.Intent
-import android.os.Build
 import com.google.android.gms.appset.AppSetIdInfo
 import io.justtrack.AttributionImpl.CampaignImpl
 import io.justtrack.AttributionImpl.ChannelImpl
 import io.justtrack.AttributionImpl.PartnerImpl
+import io.justtrack.api.AttributionApi
 import io.justtrack.attribution.AdvertiserIdInfo
+import io.justtrack.dtos.DTOAttributionOutput
 import io.justtrack.events.MetricUnit
 import io.justtrack.installreferrer.api.ReferrerDetails
 import io.justtrack.log.LoggerFields
 import io.justtrack.log.LoggerFieldsBuilder
 import io.justtrack.retargeting.RetargetingParameters
+import io.justtrack.util.InstallerSourceIdProvider
 import io.justtrack.versions.VersionBundle
-import org.json.JSONException
 import org.json.JSONObject
 import java.util.UUID
 
@@ -21,15 +22,15 @@ internal class AttributionTask(
     private val intent: Intent?,
     private val databaseInterface: DatabaseInterface,
     private val attributionParams: AttributionParams,
-    private val httpClient: HttpClient,
+    private val attributionApi: AttributionApi,
     private val logger: HttpLogger,
-    private val sdk: BaseJustTrackSdk,
     private val versionBundle: VersionBundle,
-) : Task<AttributionOutput?> {
+    installerSourceIdProvider: InstallerSourceIdProvider,
+) : Task<AttributionOutput> {
     override suspend fun execute(): AttributionOutput {
-        val connectionType = sdk.deviceInfo.getConnectionType()
+        val connectionType = attributionParams.deviceInfo.getConnectionType()
         val start = System.currentTimeMillis()
-        attributionParams.claimProvider.refreshClaims(sdk)
+        attributionParams.claimProvider.refreshClaims()
         val details: ReferrerDetails? = try {
             attributionParams.referrerDetails.await()
         } catch (e: Throwable) {
@@ -39,13 +40,14 @@ internal class AttributionTask(
         val advertiserIdInfo = attributionParams.advertiserId.await()
         val appSetIdInfo = attributionParams.appSetIdInfoFuture.await()
         val claims = attributionParams.claimProvider.provideClaims(attributionParams.claimTimeout)
-        val userId = sdk.userUUID.await()
+        val userIdString = attributionParams.userIdProvider.provideUserIdFuture().await()
+        val userId = UUID.fromString(userIdString)
         val installId = attributionParams.idManager.getOrCreateInstallId().await()
         val integritySecret = attributionParams.integritySecretFuture.await()
 
         val body: JSONEncodable = AttributionInputBuilder(
             versionBundle,
-            sdk.deviceInfo,
+            attributionParams.deviceInfo,
             advertiserIdInfo.advertiserId,
             advertiserIdInfo.isLimitedAdTracking,
             attributionParams.trackingId,
@@ -60,32 +62,20 @@ internal class AttributionTask(
             integritySecret,
         ).build()
 
-        val result = httpClient.sendAttributionRequest(
-            logger,
+        val result = attributionApi.sendAttributionRequest(
             body,
             advertiserIdInfo.advertiserId,
         )
         if (result.isSuccess) {
             try {
                 val attributionOutput = parseResponse(result.getOrNull(), claims, userId)
-                val sdkConfig = attributionOutput.getSdkConfig()
-                val sdkConfigString: String? = try {
-                    sdkConfig?.toJSON(Formatter)?.toString() ?: ""
-                } catch (e: JSONException) {
-                    logger.warn("Failed to serialize SDK config to JSON", e)
-                    null
-                }
 
                 databaseInterface.openAttribution().use {
                     it.setAttributionFinished(
-                        sdk.context,
                         attributionOutput.getAttributionResponse(),
-                        attributionOutput.getTestGroup(),
-                        sdkConfigString,
                     )
                 }
 
-                sdk.getTestGroupIdProvider().setTestGroupId(attributionOutput.getTestGroup())
                 val millis = System.currentTimeMillis() - start
                 val dimensions: LoggerFields = LoggerFieldsBuilder().with("Network", connectionType.toString())
                 logger.publishMetric(
@@ -103,34 +93,7 @@ internal class AttributionTask(
         }
     }
 
-    private val installSource: String
-        get() {
-            var installer: String?
-            try {
-                val packageName = sdk.deviceInfo.getApplicationPackageName()
-                val packageManager = sdk.context.packageManager
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    val sourceInfo = packageManager.getInstallSourceInfo(packageName)
-                    installer = sourceInfo.installingPackageName
-                    if (installer == null) {
-                        installer = sourceInfo.initiatingPackageName
-                    }
-                    logger.debug(
-                        "Retrieved installer source data",
-                        LoggerFieldsBuilder()
-                            .with("installer", sourceInfo.installingPackageName ?: "unknown")
-                            .with("initiator", sourceInfo.initiatingPackageName ?: "unknown"),
-                    )
-                } else {
-                    @Suppress("DEPRECATION")
-                    installer = sdk.context.packageManager.getInstallerPackageName(packageName)
-                }
-            } catch (e: Throwable) {
-                logger.warn("Failed to lookup installer package name", e)
-                return "unknown"
-            }
-            return installer ?: "unknown"
-        }
+    private val installSource = installerSourceIdProvider.getInstallerSourceId()
 
     @Throws(ParseAttributionException::class)
     private fun parseResponse(response: JSONObject?, claims: ProvidedClaims, userId: UUID): AttributionOutput {
@@ -140,25 +103,20 @@ internal class AttributionTask(
         return try {
             val output = DTOAttributionOutput(response, Formatter)
             logger.setUser(userId, output.user.installId)
-            output.sdkConfig?.let {
-                logger.setLogAndMetricRules(it)
-                httpClient.setUserEventRules(it.event.rules)
-            }
             val attributionResponse: AttributionResponse = AttributionResponseImpl(
                 userId,
                 output.user.installId,
                 output.user.type,
                 CampaignImpl(
-                    output.attribution.campaign.id,
+                    output.attribution.campaign.externalId,
                     output.attribution.campaign.name,
                     output.attribution.campaign.type,
-                    output.attribution.campaign.isOrganic,
+                    output.attribution.campaign.organic,
                 ),
-                output.attribution.type,
                 ChannelImpl(
                     output.attribution.channel.id,
                     output.attribution.channel.name,
-                    output.attribution.channel.isIncent,
+                    output.attribution.channel.incent,
                 ),
                 PartnerImpl(
                     output.attribution.network.id,
@@ -169,7 +127,7 @@ internal class AttributionTask(
                 output.attribution.sourcePlacement,
                 output.attribution.adsetId,
                 output.attribution.attributedAt,
-                output.user.isRedownload,
+                output.user.redownload,
             )
             var retargetingParameters: RetargetingParameters? = null
             val retargeting = output.retargeting
@@ -195,8 +153,6 @@ internal class AttributionTask(
             AttributionOutput(
                 attributionResponse,
                 retargetingParameters,
-                output.user.testGroup,
-                output.sdkConfig,
                 claims.isTimedOut,
             )
         } catch (e: Exception) {
@@ -206,6 +162,7 @@ internal class AttributionTask(
 
     internal data class AttributionParams(
         internal val idManager: AttributionIdManager,
+        internal val userIdProvider: UserIdProvider,
         internal val advertiserId: AsyncFuture<AdvertiserIdInfo>,
         internal val referrerDetails: AsyncFuture<ReferrerDetails?>,
         internal val appSetIdInfoFuture: AsyncFuture<AppSetIdInfo?>,
@@ -214,6 +171,7 @@ internal class AttributionTask(
         internal val claimProvider: ClaimProvider,
         internal val claimTimeout: Long,
         internal val sdkConfig: JustTrackSdkConfig,
+        internal val deviceInfo: DeviceInfo,
         internal val integritySecretFuture: AsyncFuture<String>,
     )
 

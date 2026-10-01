@@ -15,6 +15,7 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import io.justtrack.crashes.CrashHandler;
 import io.justtrack.events.JtSessionTrackingEvent;
 import io.justtrack.events.TimeUnitGroup;
 
@@ -24,9 +25,9 @@ import io.justtrack.events.TimeUnitGroup;
  * something on this class while already having a lock on the SDK, causing them to deadlock.
  */
 class SessionManagerImpl implements SessionManager, Runnable {
-    private static final String SESSION_PREF_NAME = "justtrack-session-manager";
+    static final String SESSION_PREF_NAME = "justtrack-session-manager";
     @NonNull
-    private final WeakReference<BaseJustTrackSdk> sdk;
+    private final WeakReference<EventTracker> eventTracker;
     @Nullable
     private Session session;
     @Nullable
@@ -40,28 +41,33 @@ class SessionManagerImpl implements SessionManager, Runnable {
     @NonNull
     private final AtomicBoolean isTracking;
 
-    SessionManagerImpl(@NonNull BaseJustTrackSdk sdk, @NonNull Context context, @NonNull AtomicBoolean isTracking) {
+    SessionManagerImpl(
+            @NonNull EventTracker eventTracker,
+            @NonNull CrashHandler crashHandler,
+            @NonNull Context context,
+            @NonNull AtomicBoolean isTracking
+    ) {
         // this needs to be its own weak reference, we don't want to start reporting
         // sessions for other sdk instances if the sdk is restarted while we are still running
-        this.sdk = new WeakReference<>(sdk);
+        this.eventTracker = new WeakReference<>(eventTracker);
         lastSessionId = null;
         worker = new Thread(this);
-        worker.setUncaughtExceptionHandler(sdk.crashHandler.getUncaughtExceptionHandler());
+        worker.setUncaughtExceptionHandler(crashHandler.getUncaughtExceptionHandler());
         worker.setName("JustTrack_SessionManager_Worker");
         queue = new LinkedBlockingDeque<>();
-        store = SharedPreferencesKt.getSharePrefIO(context, SESSION_PREF_NAME, Context.MODE_PRIVATE);
+        store = context.getSharedPreferences(SESSION_PREF_NAME, Context.MODE_PRIVATE);
         session = null;
         this.isTracking = isTracking;
     }
 
     @Override
-    public void start(@NonNull BaseJustTrackSdk sdk) {
+    public void start() {
         @Nullable Session lastSession = Session.getCurrentSession(store);
         // end any pending sessions, even when they are quite old. it is important that we try to have
         // the raw data on the backend side as complete as possible
         if (lastSession != null) {
             JtSessionTrackingEvent endEvent = lastSession.end();
-            sdk.publishEvent(endEvent);
+            eventTracker.get().track(endEvent, this);
             Session.remove(store);
         }
 
@@ -107,9 +113,9 @@ class SessionManagerImpl implements SessionManager, Runnable {
         }
 
         if (startEvent != null) {
-            final BaseJustTrackSdk sdkRef = sdk.get();
-            if (sdkRef != null) {
-                sdkRef.publishEvent(startEvent);
+            final EventTracker eventTrackerRef = eventTracker.get();
+            if (eventTrackerRef != null) {
+                eventTrackerRef.track(startEvent, this);
             }
         }
 
@@ -117,7 +123,7 @@ class SessionManagerImpl implements SessionManager, Runnable {
     }
 
     @Override
-    public void shutdown(@NonNull BaseJustTrackSdk sdkRef) {
+    public void shutdown() {
         final JtSessionTrackingEvent endEvent;
 
         // Deadlock-Safety: We only update local state - we acquire the lock of the SDK only after
@@ -132,7 +138,10 @@ class SessionManagerImpl implements SessionManager, Runnable {
         }
 
         if (endEvent != null) {
-            sdkRef.publishEvent(endEvent);
+            final EventTracker eventTrackerRef = eventTracker.get();
+            if (eventTrackerRef != null) {
+                eventTrackerRef.track(endEvent, this);
+            }
         }
     }
 
@@ -166,15 +175,15 @@ class SessionManagerImpl implements SessionManager, Runnable {
         while (true) {
             try {
                 Event event = getNextEvent();
-                @Nullable BaseJustTrackSdk sdkRef = sdk.get();
-                if (sdkRef == null) {
+                @Nullable EventTracker eventTrackerRef = eventTracker.get();
+                if (eventTrackerRef == null) {
                     // the SDK got destroyed, terminate
                     return;
                 }
                 if (event == Event.START) {
-                    handleStartEvent(sdkRef);
+                    handleStartEvent(eventTrackerRef);
                 } else {
-                    handleStopEvent(sdkRef);
+                    handleStopEvent(eventTrackerRef);
                 }
             } catch (InterruptedException exception) {
                 // we are told to terminate
@@ -201,7 +210,7 @@ class SessionManagerImpl implements SessionManager, Runnable {
         }
     }
 
-    private void handleStartEvent(@NonNull BaseJustTrackSdk sdkRef) {
+    private void handleStartEvent(@NonNull EventTracker eventTracker) {
         final JtSessionTrackingEvent startEvent;
 
         // Deadlock-Safety: We only update local state - we acquire the lock of the SDK only after
@@ -214,10 +223,10 @@ class SessionManagerImpl implements SessionManager, Runnable {
             startEvent = startSession();
         }
 
-        sdkRef.publishEvent(startEvent);
+        eventTracker.track(startEvent, this);
     }
 
-    private void handleStopEvent(@NonNull BaseJustTrackSdk sdkRef) {
+    private void handleStopEvent(@NonNull EventTracker eventTracker) {
         final JtSessionTrackingEvent endEvent;
 
         // Deadlock-Safety: We only update local state - we acquire the lock of the SDK only after
@@ -227,7 +236,7 @@ class SessionManagerImpl implements SessionManager, Runnable {
         }
 
         if (endEvent != null) {
-            sdkRef.publishEvent(endEvent);
+            eventTracker.track(endEvent, this);
         }
     }
 
@@ -262,12 +271,12 @@ class SessionManagerImpl implements SessionManager, Runnable {
         private void persist(@NonNull SharedPreferences store) {
             sessionLastTick = System.currentTimeMillis();
             long sessionAge = sessionLastTick - sessionStart;
-            SharedPreferencesKt.putStringIO(store, SESSION_KEY, sessionId + ":" + sessionAge + ":" + sessionLastTick);
+            SharedPreferencesKt.putString(store, SESSION_KEY, sessionId + ":" + sessionAge + ":" + sessionLastTick);
         }
 
         @Nullable
         static Session getCurrentSession(@NonNull SharedPreferences preferences) {
-            @Nullable String sessionString = SharedPreferencesKt.getStringIO(preferences, SESSION_KEY, null);
+            @Nullable String sessionString = preferences.getString(SESSION_KEY, null);
 
             if (sessionString == null) {
                 return null;
@@ -286,7 +295,7 @@ class SessionManagerImpl implements SessionManager, Runnable {
         }
 
         static void remove(@NonNull SharedPreferences preferences) {
-            SharedPreferencesKt.removeIO(preferences, SESSION_KEY);
+            SharedPreferencesKt.remove(preferences, SESSION_KEY);
         }
 
         JtSessionTrackingEvent end() {
@@ -294,7 +303,7 @@ class SessionManagerImpl implements SessionManager, Runnable {
         }
 
         JtSessionTrackingEvent end(@NonNull Date now) {
-            return new JtSessionTrackingEvent(sessionId.toString(), "end", (double)(now.getTime() - sessionStart), TimeUnitGroup.MILLISECONDS, now);
+            return new JtSessionTrackingEvent(sessionId.toString(), "end", (double) (now.getTime() - sessionStart), TimeUnitGroup.MILLISECONDS, now);
         }
 
         @VisibleForTesting

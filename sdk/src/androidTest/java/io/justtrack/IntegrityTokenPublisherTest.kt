@@ -2,9 +2,11 @@ package io.justtrack
 
 import android.content.Context
 import androidx.test.platform.app.InstrumentationRegistry
+import io.justtrack.api.DefaultAttributionApi
+import io.justtrack.api.IntegrityApi
 import io.justtrack.database.Database
+import io.justtrack.dtos.DTOIntegrityToken
 import io.justtrack.exceptions.IntegrityException
-import io.justtrack.log.Logger
 import io.justtrack.util.ExecutorServiceFactory
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
@@ -46,7 +48,7 @@ class IntegrityTokenPublisherTest {
     @Test
     fun test_alreadySent() = runBlocking {
         val logger = mock<HttpLogger>()
-        val httpClient = spy<TestIntegrityHttpClient>()
+        val apis = spy<TestIntegrityApis>()
         val integrityTokenTask = TestAsyncFuture(IntegrityTokenData(previouslySent = true))
         val integrityTokenMethod: () -> TestAsyncFuture<IntegrityTokenData> = object : () -> TestAsyncFuture<IntegrityTokenData> {
             override fun invoke(): TestAsyncFuture<IntegrityTokenData> {
@@ -54,18 +56,19 @@ class IntegrityTokenPublisherTest {
             }
         }
         val installID = ValueFuture(UUID.randomUUID().toString())
-        val sdk = TestSdk(context, executorBuilder, httpClient, false)
-        val publisher = IntegrityTokenPublisher(sdk.taskExecutor, deviceInfo, RetryConfig.TEST_INTEGRITY_CONFIG)
+        val sdk = TestSdk(context, executorBuilder, false, attributionApi = apis, integrityApi = apis)
+        val publisher =
+            IntegrityTokenPublisher(sdk.taskExecutor, deviceInfo, RetryConfig.TEST_INTEGRITY_CONFIG)
 
         val result = publisher.publishIntegrityToken(
             logger,
             NetworkErrorLogger(),
-            httpClient,
+            apis,
             databaseInterface,
             integrityTokenMethod,
             installID,
         ).await()
-        verify(httpClient, times(0)).reportIntegrity(any(), any(), any())
+        verify(apis, times(0)).reportIntegrity(any(), any())
         Assert.assertTrue(result)
     }
 
@@ -73,7 +76,7 @@ class IntegrityTokenPublisherTest {
     fun test_success() = runBlocking {
         val logger = mock<HttpLogger>()
         val token = UUID.randomUUID().toString()
-        val httpClient = spy(TestIntegrityHttpClient(true))
+        val apis = spy(TestIntegrityApis(true))
         val integrityTokenTask = TestAsyncFuture(IntegrityTokenData(previouslySent = false, token = token))
         val integrityTokenMethod: () -> TestAsyncFuture<IntegrityTokenData> = object : () -> TestAsyncFuture<IntegrityTokenData> {
             override fun invoke(): TestAsyncFuture<IntegrityTokenData> {
@@ -81,20 +84,21 @@ class IntegrityTokenPublisherTest {
             }
         }
         val installID = ValueFuture(UUID.randomUUID().toString())
-        val sdk = TestSdk(context, executorBuilder, httpClient, false)
-        val publisher = IntegrityTokenPublisher(sdk.taskExecutor, deviceInfo, RetryConfig.TEST_INTEGRITY_CONFIG)
+        val sdk = TestSdk(context, executorBuilder, false, attributionApi = apis, integrityApi = apis)
+        val publisher =
+            IntegrityTokenPublisher(sdk.taskExecutor, deviceInfo, RetryConfig.TEST_INTEGRITY_CONFIG)
 
         val result = publisher.publishIntegrityToken(
             logger,
             NetworkErrorLogger(),
-            httpClient,
+            apis,
             databaseInterface,
             integrityTokenMethod,
             installID,
         ).await()
 
         val argumentCaptor = argumentCaptor<JSONEncodable>()
-        verify(httpClient, times(1)).reportIntegrity(any(), argumentCaptor.capture(), any())
+        verify(apis, times(1)).reportIntegrity(argumentCaptor.capture(), any())
         var isSent: Boolean?
         databaseInterface.openAttribution().use {
             isSent = it.isIntegrityTokenSent()
@@ -111,7 +115,7 @@ class IntegrityTokenPublisherTest {
         val logger = mock<HttpLogger>()
         val errorCode = -3
         val errorMessage = "retryAle error message"
-        val httpClient = spy(TestIntegrityHttpClient(true))
+        val apis = spy(TestIntegrityApis(true))
         val integrityTokenTask = TestAsyncFuture(
             IntegrityTokenData(
                 previouslySent = false,
@@ -124,19 +128,20 @@ class IntegrityTokenPublisherTest {
             }
         }
         val installID = ValueFuture(UUID.randomUUID().toString())
-        val sdk = TestSdk(context, executorBuilder, httpClient, false)
-        val publisher = IntegrityTokenPublisher(sdk.taskExecutor, deviceInfo, RetryConfig.TEST_INTEGRITY_CONFIG)
+        val sdk = TestSdk(context, executorBuilder, false, attributionApi = apis, integrityApi = apis)
+        val publisher =
+            IntegrityTokenPublisher(sdk.taskExecutor, deviceInfo, RetryConfig.TEST_INTEGRITY_CONFIG)
 
         val result = publisher.publishIntegrityToken(
             logger,
             NetworkErrorLogger(),
-            httpClient,
+            apis,
             databaseInterface,
             integrityTokenMethod,
             installID,
         ).await()
         val argumentCaptor = argumentCaptor<JSONEncodable>()
-        verify(httpClient, times(1)).reportIntegrity(any(), argumentCaptor.capture(), any())
+        verify(apis, times(1)).reportIntegrity(argumentCaptor.capture(), any())
         var isSent: Boolean?
         databaseInterface.openAttribution().use {
             isSent = it.isIntegrityTokenSent()
@@ -155,7 +160,7 @@ class IntegrityTokenPublisherTest {
         val logger = mock<HttpLogger>()
         val errorCode = -1
         val errorMessage = "non retryAble error message"
-        val httpClient = spy(TestIntegrityHttpClient(true))
+        val apis = spy(TestIntegrityApis(true))
         val integrityTokenTask = TestAsyncFuture(
             IntegrityTokenData(
                 previouslySent = false,
@@ -168,19 +173,20 @@ class IntegrityTokenPublisherTest {
             }
         }
         val installID = ValueFuture(UUID.randomUUID().toString())
-        val sdk = TestSdk(context, executorBuilder, httpClient, false)
-        val publisher = IntegrityTokenPublisher(sdk.taskExecutor, deviceInfo, RetryConfig.TEST_INTEGRITY_CONFIG)
+        val sdk = TestSdk(context, executorBuilder, false, attributionApi = apis, integrityApi = apis)
+        val publisher =
+            IntegrityTokenPublisher(sdk.taskExecutor, deviceInfo, RetryConfig.TEST_INTEGRITY_CONFIG)
 
         val result = publisher.publishIntegrityToken(
             logger,
             NetworkErrorLogger(),
-            httpClient,
+            apis,
             databaseInterface,
             integrityTokenMethod,
             installID,
         ).await()
         val argumentCaptor = argumentCaptor<JSONEncodable>()
-        verify(httpClient, times(1)).reportIntegrity(any(), argumentCaptor.capture(), any())
+        verify(apis, times(1)).reportIntegrity(argumentCaptor.capture(), any())
         var isSent: Boolean?
         databaseInterface.openAttribution().use {
             isSent = it.isIntegrityTokenSent()
@@ -199,7 +205,7 @@ class IntegrityTokenPublisherTest {
         val logger = mock<HttpLogger>()
         val token = UUID.randomUUID().toString()
         val errorMessage = "Fail"
-        val httpClient = spy(TestIntegrityHttpClient(false, errorMessage))
+        val apis = spy(TestIntegrityApis(false, errorMessage))
         val integrityTokenTask = TestAsyncFuture(IntegrityTokenData(previouslySent = false, token = token))
         val integrityTokenMethod: () -> TestAsyncFuture<IntegrityTokenData> = object : () -> TestAsyncFuture<IntegrityTokenData> {
             override fun invoke(): TestAsyncFuture<IntegrityTokenData> {
@@ -207,20 +213,21 @@ class IntegrityTokenPublisherTest {
             }
         }
         val installID = ValueFuture(UUID.randomUUID().toString())
-        val sdk = TestSdk(context, executorBuilder, httpClient, false)
-        val publisher = IntegrityTokenPublisher(sdk.taskExecutor, deviceInfo, RetryConfig.TEST_INTEGRITY_CONFIG)
+        val sdk = TestSdk(context, executorBuilder, false, attributionApi = apis, integrityApi = apis)
+        val publisher =
+            IntegrityTokenPublisher(sdk.taskExecutor, deviceInfo, RetryConfig.TEST_INTEGRITY_CONFIG)
 
         val result = publisher.publishIntegrityToken(
             logger,
             NetworkErrorLogger(),
-            httpClient,
+            apis,
             databaseInterface,
             integrityTokenMethod,
             installID,
         ).await()
 
         val argumentCaptor = argumentCaptor<JSONEncodable>()
-        verify(httpClient, times(4)).reportIntegrity(any(), argumentCaptor.capture(), any())
+        verify(apis, times(4)).reportIntegrity(argumentCaptor.capture(), any())
         var isSent: Boolean?
         databaseInterface.openAttribution().use {
             isSent = it.isIntegrityTokenSent()
@@ -232,11 +239,11 @@ class IntegrityTokenPublisherTest {
         Assert.assertFalse(result)
     }
 
-    internal open class TestIntegrityHttpClient(
+    internal open class TestIntegrityApis(
         private val isReportIntegritySuccess: Boolean = true,
         private val reportIntegrityErrorMessage: String? = null,
-    ) : BaseTestHttpClient() {
-        override suspend fun reportIntegrity(logger: Logger, body: JSONEncodable, installId: String): Result<JSONObject> {
+    ) : DefaultAttributionApi(), IntegrityApi {
+        override suspend fun reportIntegrity(body: JSONEncodable, installId: String): Result<JSONObject> {
             if (isReportIntegritySuccess) {
                 return Result.success(JSONObject("{}"))
             } else {
@@ -244,7 +251,7 @@ class IntegrityTokenPublisherTest {
             }
         }
 
-        override suspend fun sendAttributionRequest(logger: Logger, body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
+        override suspend fun sendAttributionRequest(body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
             return Result.success(null)
         }
     }

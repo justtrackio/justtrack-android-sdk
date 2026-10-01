@@ -1,12 +1,12 @@
 package io.justtrack
 
 import android.content.ContentValues
-import androidx.annotation.VisibleForTesting
 import io.justtrack.database.Database
 import io.justtrack.database.DatabaseEntity
 import io.justtrack.events.Unit
 import io.justtrack.log.Logger
 import io.justtrack.versions.SdkVersionImpl
+import org.jetbrains.annotations.VisibleForTesting
 import org.json.JSONObject
 import java.text.ParseException
 import java.util.Calendar
@@ -15,21 +15,21 @@ import java.util.UUID
 
 internal data class UserEventEntity(
     @get:VisibleForTesting override var id: Long = -1,
-    @get:VisibleForTesting val eventId: String,
-    @get:VisibleForTesting val eventName: String,
-    @get:VisibleForTesting val dimensions: String,
-    @get:VisibleForTesting val sessionId: String,
-    @get:VisibleForTesting val value: Double,
-    @get:VisibleForTesting val unit: String?,
-    @get:VisibleForTesting val currency: String?,
-    @get:VisibleForTesting val timestamp: String,
-    @get:VisibleForTesting val timestampInMS: Long,
-    @get:VisibleForTesting var processingTimeInMS: Long = -1,
-    @get:VisibleForTesting var sequenceNumber: Long = -1,
-    @get:VisibleForTesting val sdkVersionMajor: Long,
-    @get:VisibleForTesting val sdkVersionMinor: Long,
-    @get:VisibleForTesting val sdkVersionPatch: Long,
-    @get:VisibleForTesting var sdkVersionName: String,
+    @get:VisibleForTesting internal val eventId: String,
+    @get:VisibleForTesting internal val eventName: String,
+    @get:VisibleForTesting internal val dimensions: String,
+    @get:VisibleForTesting internal val sessionId: String,
+    @get:VisibleForTesting internal val value: Double,
+    @get:VisibleForTesting internal val unit: String?,
+    @get:VisibleForTesting internal val currency: String?,
+    @get:VisibleForTesting internal val timestamp: String,
+    @get:VisibleForTesting internal val timestampInMS: Long,
+    @get:VisibleForTesting internal var processingTimeInMS: Long = -1,
+    @get:VisibleForTesting internal var sequenceNumber: Long = -1,
+    @get:VisibleForTesting internal val sdkVersionMajor: Long,
+    @get:VisibleForTesting internal val sdkVersionMinor: Long,
+    @get:VisibleForTesting internal val sdkVersionPatch: Long,
+    @get:VisibleForTesting internal var sdkVersionName: String,
 ) : DatabaseEntity {
     internal constructor(data: StorableEvent, formatter: Formatter) : this(
         id = data.id,
@@ -50,8 +50,8 @@ internal data class UserEventEntity(
     )
 
     @JvmName("transform")
-    internal fun transform(formatter: Formatter, logger: Logger, platformType: PlatformType): PublishingEvent {
-        val resultDimensionMap = TreeMap<String, String?>()
+    internal fun transform(formatter: Formatter, logger: Logger, platformType: PlatformType): StorableEvent {
+        val resultDimensionMap = TreeMap<String?, String?>()
         try {
             val dimensionJson = JSONObject(this.dimensions)
             for (key in dimensionJson.keys()) {
@@ -74,7 +74,7 @@ internal data class UserEventEntity(
             Calendar.getInstance().time
         }
 
-        return PublishingEvent(
+        return StorableEvent(
             this.id,
             UUID.fromString(this.eventId),
             PublishableAppEvent(
@@ -120,6 +120,7 @@ internal data class UserEventEntity(
         return contentValues
     }
 
+    // This is require because this equal method ignore the id field in the database.
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false

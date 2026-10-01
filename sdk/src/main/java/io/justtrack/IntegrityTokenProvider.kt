@@ -8,6 +8,7 @@ import com.google.android.play.core.integrity.StandardIntegrityManager
 import com.google.android.play.core.integrity.StandardIntegrityManager.StandardIntegrityToken
 import com.google.android.play.core.integrity.StandardIntegrityManager.StandardIntegrityTokenProvider
 import io.justtrack.exceptions.IntegrityException
+import io.justtrack.executor.TaskExecutor
 import java.security.NoSuchAlgorithmException
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Future
@@ -63,7 +64,7 @@ internal class IntegrityTokenProvider internal constructor(
                 this,
             )
 
-            currentFuture = taskExecutor.executeAsFuture(
+            currentFuture = taskExecutor.executeFuture(
                 IntegrityRetryGetterTask(
                     FixedRetryingTask(
                         integrityTokenGetterTask,

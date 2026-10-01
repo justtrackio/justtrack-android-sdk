@@ -4,9 +4,10 @@ import android.app.Application
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
+import io.justtrack.api.DefaultAttributionApi
 import io.justtrack.database.Database
-import io.justtrack.log.Logger
 import io.justtrack.publicInterface.SdkTest
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.json.JSONException
@@ -43,18 +44,20 @@ class AttributionTest {
             (context.applicationContext as Application),
             SdkTest.API_TOKEN,
         )
+        val successAfterSomeRetriesAttributionApi = SuccessAfterSomeRetriesAttributionApi()
+
         builder.setAttributionRetryDelaySeconds(3)
-        val sdk = JustTrackSdkImpl.createForTesting(
+        val sdk = createForTesting(
             builder,
-            SuccessAfterSomeRetriesHttpClient(),
             RetryConfig.DEFAULT_CONFIG,
             null,
             null,
+            successAfterSomeRetriesAttributionApi,
         )
         // try a few times to get the attribution, should stay cached after the first failure
         for (i in 0..2) {
             try {
-                val attribution = sdk.attributionResponse.get()
+                val attribution = sdk.attributionOutputProvider.provideAttributionOutput(null).get().getAttributionResponse()
                 Assert.fail("Should've failed, got " + attribution.getUserId())
             } catch (exception: ExecutionException) {
                 var ex: Throwable? = exception
@@ -66,7 +69,7 @@ class AttributionTest {
         }
         // sleep some time, we should only now fetch a new attribution
         Thread.sleep(5000)
-        val attribution = sdk.attributionResponse.get()
+        val attribution = sdk.attributionOutputProvider.provideAttributionOutput(null).get().getAttributionResponse()
         Assert.assertNotEquals("00000000-0000-0000-0000-000000000000", attribution.getUserId().toString())
 
         sdk.shutdown()
@@ -88,28 +91,32 @@ class AttributionTest {
             SdkTest.API_TOKEN,
         )
         val nextRequestFailed = AtomicBoolean(false)
-        val httpClient = TestHttpClient(
+        val failedRequestStarted = CompletableDeferred<Unit>()
+        val testApis = TestAttributionApi(
             failedDelay = 500,
             nextRequestFailed = nextRequestFailed,
+            failedRequestStarted = failedRequestStarted,
         )
-        val sdk = JustTrackSdkImpl.createForTesting(
+
+        val sdk = createForTesting(
             builder,
-            httpClient,
             RetryConfig(0, 0, 5, RetryConfig.TEST_INTEGRITY_CONFIG),
             null,
             null,
+            testApis,
         )
 
-        // There are background attribution called.
-        delay(500)
-        httpClient.nextRequestFailed.set(true)
-        val firstAttribute = sdk.getAttributionOutput(AttributionDecision.FETCH_RETARGETING_ATTRIBUTION)
-        delay(100L)
-        val secondAttribute = sdk.getAttributionOutput(AttributionDecision.FETCH_RETARGETING_ATTRIBUTION)
-        val thirdAttribute = sdk.getAttributionOutput(AttributionDecision.FETCH_RETARGETING_ATTRIBUTION)
+        // Wait for the startup attribution to finish before arming the next API call to fail.
+        sdk.attributionOutputProvider.provideAttributionOutput(null).get()
+        testApis.nextRequestFailed.set(true)
+        val firstAttribute = sdk.attributionOutputProvider.provideAttributionOutput(AttributionDecision.FETCH_RETARGETING_ATTRIBUTION)
+        failedRequestStarted.await()
+        val secondAttribute = sdk.attributionOutputProvider.provideAttributionOutput(AttributionDecision.FETCH_RETARGETING_ATTRIBUTION)
+        val thirdAttribute = sdk.attributionOutputProvider.provideAttributionOutput(AttributionDecision.FETCH_RETARGETING_ATTRIBUTION)
 
         try {
             firstAttribute.get()
+            Assert.fail("Expected the first attribution request to fail")
         } catch (exception: Exception) {
             var ex: Throwable? = exception
             while (ex!!.cause != null) {
@@ -142,29 +149,33 @@ class AttributionTest {
             SdkTest.API_TOKEN,
         )
         val nextRequestFailed = AtomicBoolean(false)
-        val httpClient = TestHttpClient(
+        val failedRequestStarted = CompletableDeferred<Unit>()
+        val testApis = TestAttributionApi(
             failedDelay = 1000,
             successDelay = 2000,
             nextRequestFailed = nextRequestFailed,
+            failedRequestStarted = failedRequestStarted,
         )
-        val sdk = JustTrackSdkImpl.createForTesting(
+
+        val sdk = createForTesting(
             builder,
-            httpClient,
             RetryConfig(0, 0, 5, RetryConfig.TEST_INTEGRITY_CONFIG),
             null,
             null,
+            testApis,
         )
 
-        // There are background attribution called.
-        delay(500L)
-        httpClient.nextRequestFailed.set(true)
-        val firstAttribute = sdk.getAttributionOutput(AttributionDecision.FETCH_RETARGETING_ATTRIBUTION)
-        delay(100L)
-        val secondAttribute = sdk.getAttributionOutput(AttributionDecision.FETCH_RETARGETING_ATTRIBUTION)
-        val thirdAttribute = sdk.getAttributionOutput(AttributionDecision.FETCH_RETARGETING_ATTRIBUTION)
+        // Wait for the startup attribution to finish before arming the next API call to fail.
+        sdk.attributionOutputProvider.provideAttributionOutput(null).get()
+        testApis.nextRequestFailed.set(true)
+        val firstAttribute = sdk.attributionOutputProvider.provideAttributionOutput(AttributionDecision.FETCH_RETARGETING_ATTRIBUTION)
+        failedRequestStarted.await()
+        val secondAttribute = sdk.attributionOutputProvider.provideAttributionOutput(AttributionDecision.FETCH_RETARGETING_ATTRIBUTION)
+        val thirdAttribute = sdk.attributionOutputProvider.provideAttributionOutput(AttributionDecision.FETCH_RETARGETING_ATTRIBUTION)
 
         try {
             firstAttribute.get()
+            Assert.fail("Expected the first attribution request to fail")
         } catch (exception: Exception) {
             var ex: Throwable? = exception
             while (ex!!.cause != null) {
@@ -180,14 +191,16 @@ class AttributionTest {
         sdk.shutdown()
     }
 
-    private class TestHttpClient internal constructor(
+    private class TestAttributionApi(
         val failedDelay: Long = 0,
         val successDelay: Long = 0,
         val nextRequestFailed: AtomicBoolean,
-    ) : BaseTestHttpClient() {
+        val failedRequestStarted: CompletableDeferred<Unit>,
+    ) : DefaultAttributionApi() {
 
-        override suspend fun sendAttributionRequest(logger: Logger, body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
+        override suspend fun sendAttributionRequest(body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
             if (nextRequestFailed.getAndSet(false)) {
+                failedRequestStarted.complete(Unit)
                 delay(failedDelay)
                 return Result.failure(
                     NetworkProblemException(
@@ -200,10 +213,10 @@ class AttributionTest {
         }
     }
 
-    private class SuccessAfterSomeRetriesHttpClient internal constructor() : BaseTestHttpClient() {
+    private class SuccessAfterSomeRetriesAttributionApi : DefaultAttributionApi() {
         private val remainingFails = AtomicInteger(6)
 
-        override suspend fun sendAttributionRequest(logger: Logger, body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
+        override suspend fun sendAttributionRequest(body: JSONEncodable, advertiserId: String?): Result<JSONObject?> {
             if (remainingFails.getAndDecrement() > 0) {
                 return Result.failure(
                     NetworkProblemException(
@@ -221,11 +234,10 @@ class AttributionTest {
                 user.put("id", UUID.randomUUID().toString())
                 user.put("installId", UUID.randomUUID().toString())
                 user.put("type", "acquisition")
-                user.put("testGroup", 2)
                 user.put("redownload", false)
 
                 val campaign = JSONObject()
-                campaign.put("id", 42)
+                campaign.put("externalId", "42")
                 campaign.put("name", "Test Campaign")
                 campaign.put("type", "acquisition")
                 campaign.put("organic", false)
@@ -241,7 +253,6 @@ class AttributionTest {
 
                 val attribution = JSONObject()
                 attribution.put("campaign", campaign)
-                attribution.put("type", "mcoins")
                 attribution.put("channel", channel)
                 attribution.put("network", network)
                 attribution.put("attributedAt", Formatter.formatDateMilliseconds(Date()))

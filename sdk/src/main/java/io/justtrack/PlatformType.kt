@@ -25,6 +25,9 @@ enum class PlatformType(
 
     /** Android running inside a Flutter wrapper. */
     FLUTTER("Flutter; Android", "android", "flutter"),
+
+    /** Android running inside a Godot wrapper. */
+    GODOT("Godot; Android", "android", "godot"),
     ;
 
     override fun toString(): String {

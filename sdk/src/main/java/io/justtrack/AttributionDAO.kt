@@ -1,27 +1,16 @@
 package io.justtrack
 
-import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import androidx.annotation.VisibleForTesting
-import io.justtrack.TestGroupIdReaderTask.TestGroupId
 import io.justtrack.database.AttributionEntity
 import io.justtrack.database.BaseDAO
 import io.justtrack.log.Logger
 
 internal interface AttributionDAO : BaseDAO {
-    fun migrateFromStore(context: Context, writableDatabase: SQLiteDatabase): Boolean
-    fun setAttributionFinished(
-        writableDatabase: SQLiteDatabase,
-        context: Context,
-        response: AttributionResponse,
-        testGroup: Int?,
-        sdkConfig: String?,
-    )
+    fun migrateFromStore(writableDatabase: SQLiteDatabase): Boolean
+    fun setAttributionFinished(writableDatabase: SQLiteDatabase, response: AttributionResponse)
     fun getAttributionTimestamps(readableDatabase: SQLiteDatabase): AttributionTimestamps?
-    fun getStoredOutput(context: Context, readableDatabase: SQLiteDatabase): AttributionOutput?
-    fun setTestGroupId(writableDatabase: SQLiteDatabase, testGroupId: Int?)
-    fun getTestGroupId(readableDatabase: SQLiteDatabase): TestGroupId?
-    fun getSdkConfig(readableDatabase: SQLiteDatabase): String?
+    fun getStoredOutput(readableDatabase: SQLiteDatabase): AttributionOutput?
     fun setLastOpen(writableDatabase: SQLiteDatabase, currentMs: Long)
     fun getAppVersionUpdateInfo(writableDatabase: SQLiteDatabase, currentVersion: ApplicationVersion): AppVersionUpdateInfo
 
@@ -40,5 +29,6 @@ internal interface AttributionDAO : BaseDAO {
 
     fun setLogger(logger: Logger)
 
+    fun migrateAttributionToV8(writableDatabase: SQLiteDatabase)
     fun dropFieldOperation(writableDatabase: SQLiteDatabase)
 }

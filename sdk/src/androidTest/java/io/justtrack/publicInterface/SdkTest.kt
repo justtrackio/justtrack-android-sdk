@@ -8,7 +8,6 @@ import io.justtrack.IntegrityTokenProvider
 import io.justtrack.JustTrackSdk
 import io.justtrack.JustTrackSdkBuilder
 import io.justtrack.PlatformType
-import io.justtrack.SdkBuilder
 import io.justtrack.TestLoggerImpl
 import io.justtrack.database.Database.Companion.clearForTesting
 import io.justtrack.exceptions.InvalidFieldException
@@ -56,11 +55,10 @@ class SdkTest {
         }
         IntegrityTokenProvider.mockGoogleTokenProvider(mockStandardTokenProvider)
 
-        var builder: SdkBuilder =
+        var builder: JustTrackSdkBuilder =
             JustTrackSdkBuilder((context.applicationContext as Application), API_TOKEN)
         builder = builder
             .setLogger(logger)
-            .setEnableBroadcastReceiver(true)
             .setReAttributionTimeFrame(14)
             .setInactivityTimeFrame(48)
             .setReFetchReAttributionDelaySeconds(10)
@@ -108,13 +106,6 @@ class SdkTest {
         Assert.assertNotNull(info.advertiserId)
         Assert.assertEquals(info.advertiserId, UUID.fromString(info.advertiserId).toString())
         Assert.assertFalse(info.isLimitedAdTracking)
-    }
-
-    @Test(timeout = 10_000)
-    @Throws(ExecutionException::class, InterruptedException::class)
-    fun testGetTestGroupId() {
-        val testGroupId = sdk.getTestGroupId().get()
-        Assert.assertTrue(testGroupId in 1..3)
     }
 
     companion object {

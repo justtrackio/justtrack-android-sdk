@@ -116,6 +116,7 @@
     <string name="is_tracking">is tracking:</string>
     <string name="is_tracking_start">start</string>
     <string name="is_tracking_stop">stop</string>
+    <string name="is_tracking_refresh">refresh</string>
     <string name="re_fetch">fetch</string>
     <string name="manual_start">Manual Start</string>
     <string name="auto_iap">Automatically Track IAP</string>

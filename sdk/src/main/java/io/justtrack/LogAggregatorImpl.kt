@@ -3,6 +3,8 @@ package io.justtrack
 import android.database.sqlite.SQLiteException
 import androidx.annotation.VisibleForTesting
 import io.justtrack.LogAggregator.LogSender
+import io.justtrack.dtos.DTOLogMessage
+import io.justtrack.dtos.DTOLogMetric
 import io.justtrack.log.Logger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -57,7 +59,7 @@ internal class LogAggregatorImpl constructor(
 
     override fun addLogMetric(metric: DTOLogMetric) {
         coroutineScope.launch {
-            addLogMetricSuspend(LogMetricDatum(metric))
+            addLogMetricSuspend(metric)
         }
     }
 
@@ -79,14 +81,16 @@ internal class LogAggregatorImpl constructor(
 
     @VisibleForTesting
     @JvmName("addLogMessageSuspend")
-    internal suspend fun addLogMessageSuspend(message: DTOLogMessage) = withContext(Dispatchers.IO) {
-        if (!isTracking.get()) {
-            return@withContext
-        }
-        try {
-            messageRepo.storeEntity(LogStoreMessage(message))
-        } catch (e: Exception) {
-            handleException("Unable to store message to local database", e)
+    internal suspend fun addLogMessageSuspend(message: DTOLogMessage) {
+        withContext(Dispatchers.IO) {
+            if (!isTracking.get()) {
+                return@withContext
+            }
+            try {
+                messageRepo.storeEntity(LogStoreMessage(message))
+            } catch (e: Exception) {
+                handleException("Unable to store message to local database", e)
+            }
         }
     }
 
@@ -115,12 +119,12 @@ internal class LogAggregatorImpl constructor(
                 }
                 val result = sender.sendLogsAndMetrics(messages, metrics)
 
-                if (result.isSuccess) {
+                result.onSuccess {
                     deleteEntities(messages, metrics)
-                } else {
+                }.onFailure { exception ->
                     handleException(
                         "Unable to send message (${messages.size}), metric (${metrics.size}) to server",
-                        result.exceptionOrNull() ?: Throwable("Publishing messages and metrics failed with unknown exception"),
+                        exception,
                     )
 
                     messageRepo.unMarkEntitiesById(messages.map { it.id })
@@ -160,7 +164,8 @@ internal class LogAggregatorImpl constructor(
         }
     }
 
-    private suspend fun deleteEntities(messages: List<LogStoreMessage>, metrics: List<LogStoreMetric>) {
+    @VisibleForTesting
+    internal suspend fun deleteEntities(messages: List<LogStoreMessage>, metrics: List<LogStoreMetric>) {
         try {
             messageRepo.deleteEntities(messages)
             metricRepo.deleteEntities(metrics)
@@ -169,7 +174,8 @@ internal class LogAggregatorImpl constructor(
         }
     }
 
-    private suspend fun removeOldEntitiesByCutoffDate(cutoffMS: Long) {
+    @VisibleForTesting
+    internal suspend fun removeOldEntitiesByCutoffDate(cutoffMS: Long) {
         try {
             messageRepo.removeEntitiesByDate(cutoffMS)
             metricRepo.removeEntitiesByDate(cutoffMS)
@@ -178,7 +184,8 @@ internal class LogAggregatorImpl constructor(
         }
     }
 
-    private fun handleException(message: String, exception: Throwable) {
+    @VisibleForTesting
+    internal fun handleException(message: String, exception: Throwable) {
         when (exception) {
             is SQLiteException, is SQLException -> {
                 logger.warn("LogAggregator Failed, $message: SQL error ", exception)
